@@ -1,5 +1,7 @@
 
-## :one: 产品规格 🎁
+将 CrossPoint 移植到 T-Deck-Max ；
+注意不用兼容之前的板子，是单独为 T-Deck-Max 适配；
+
 
 |       参数       |      T-Deck-MAX          |
 | :--------------: | :----------------------------: |
@@ -7,7 +9,7 @@
 |  Flash / PSRAM   |            16M / 8M            |
 |       LoRa       |             SX1262             |
 |       GPS        |            MIA-M10Q            |
-|     显示屏       |      GDEQ031T10 (320x240)      |
+|     显示屏       |      GDEQ031T10 (240x320)      |
 |    4G 模块      |             A7682E             |
 | 电池容量 |          3.7V-1500mAh          |
 |   电池芯片   | SY6970 (0x6A), BQ27220 (0x55) |
@@ -18,10 +20,21 @@
 |   IO 扩展   |         XL9555 (0x20)          |
 |      马达       |         DRV2605 (0x5A)         |
 
+PlatformIO 基础配置
+platform = espressif32@6.13.0
+board = T-Deck-Max
+framework = arduino
+monitor_speed = 115200
+upload_speed = 921600
 
-屏幕驱动使用 zinggjm/GxEPD2@^1.6.9 库对应的 GxEPD2_310_GDEQ031T10 型号；
+屏幕驱动使用 zinggjm/GxEPD2@^1.6.9 库对应的 GxEPD2_310_GDEQ031T10 型号；不要使用 open-x4-sdk
+
 扩展芯片 XL9555 使用驱动 lewisxhe/SensorLib@^0.4.1；
+
+触摸驱动使用 lib/HynTouch 
+
 SY6970 使用 lewisxhe/XPowersLib@^0.3.3
+
 键盘使用 adafruit/Adafruit TCA8418@^1.0.2
 键盘布局
 ~~~cpp
@@ -53,17 +66,12 @@ CrossPoint 按键映射
 |    Left    |       A        |
 |   Right    |       D        |
 |     Up     |       W        |
-|    Down    |       A        |
+|    Down    |       S        |
 |   Power    |      BOOT      |
 
 
-### 2. ES8311
+引脚映射：[pinmap](./pinmap_cn.md)
 
-❗ 注意：A7682E 和 ES8311 的扬声器是共用的。将 `XL9555` 的 `IO12` 设为 `LOW` 可输出 ES8311 音频。
-声音太小时：将 `XL9555` 的 `IO06` 设为 `HIGH` 启用功率放大器。
 
-### 3. LoRa
-
-注意：
- 使用内置天线时，将 `XL9555` 的 `IO04` 设为 `HIGH`。<br><br>使用外置天线时，将 `XL9555` 的 `IO04` 设为 `LOW`。<br><br>当前仓库以 `HIGH` 表示内置天线，`LOW` 表示外置天线。 
-
+CrossPoint 项目路径：D:\dgx\code\2_studycode\crosspoint-reader
+T-Deck-Max 项目路径：D:\dgx\code\0_lilygo\T_Deck_Pro_MAX
