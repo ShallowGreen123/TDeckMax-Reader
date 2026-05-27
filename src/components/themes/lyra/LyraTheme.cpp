@@ -39,6 +39,8 @@ constexpr int maxListValueWidth = 200;
 constexpr int mainMenuIconSize = 32;
 constexpr int listIconSize = 24;
 constexpr int mainMenuColumns = 2;
+constexpr int lyraHeaderBatteryYOffset = 2;
+constexpr int lyraHeaderTitleYOffset = -12;
 int coverWidth = 0;
 
 void drawLyraBatteryIcon(const GfxRenderer& renderer, int x, int y, int battWidth, int rectHeight,
@@ -150,7 +152,8 @@ void LyraTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
   // Position icon at right edge, drawBatteryRight will place text to the left
   const int batteryX = rect.x + rect.width - 12 - LyraMetrics::values.batteryWidth;
   drawBatteryRight(renderer,
-                   Rect{batteryX, rect.y + 5, LyraMetrics::values.batteryWidth, LyraMetrics::values.batteryHeight},
+                   Rect{batteryX, rect.y + lyraHeaderBatteryYOffset, LyraMetrics::values.batteryWidth,
+                        LyraMetrics::values.batteryHeight},
                    showBatteryPercentage);
 
   const int textLeft = rect.x + LyraMetrics::values.contentSidePadding;
@@ -161,8 +164,8 @@ void LyraTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
   const int subtitleHeight = renderer.getLineHeight(SMALL_FONT_ID);
   const int textAreaTop = rect.y + LyraMetrics::values.batteryBarHeight;
   const int textAreaHeight = std::max(0, underlineY - textAreaTop - 1);
-  const int titleY = textAreaTop + std::max(0, (textAreaHeight - titleHeight) / 2);
-  const int subtitleY = textAreaTop + std::max(0, (textAreaHeight - subtitleHeight) / 2);
+  const int titleY = textAreaTop + std::max(0, (textAreaHeight - titleHeight) / 2) + lyraHeaderTitleYOffset;
+  const int subtitleY = textAreaTop + std::max(0, (textAreaHeight - subtitleHeight) / 2) + lyraHeaderTitleYOffset;
 
   if (title) {
     int maxTitleWidth = availableSpace;
@@ -213,32 +216,53 @@ void LyraTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const char
 
 void LyraTheme::drawTabBar(const GfxRenderer& renderer, Rect rect, const std::vector<TabInfo>& tabs,
                            bool selected) const {
-  int currentX = rect.x + LyraMetrics::values.contentSidePadding;
-  const int textY = rect.y + std::max(0, (rect.height - renderer.getLineHeight(UI_10_FONT_ID)) / 2);
+  if (tabs.empty()) {
+    renderer.drawLine(rect.x, rect.y + rect.height - 1, rect.x + rect.width - 1, rect.y + rect.height - 1, true);
+    return;
+  }
 
   if (selected) {
     renderer.fillRectDither(rect.x, rect.y, rect.width, rect.height, Color::LightGray);
   }
 
+  const int tabCount = static_cast<int>(tabs.size());
+  const int edgePadding = std::max(4, LyraMetrics::values.contentSidePadding - 4);
+  const int slotSpacing = std::max(2, LyraMetrics::values.tabSpacing / 2);
+  const int availableWidth = rect.width - edgePadding * 2 - slotSpacing * (tabCount - 1);
+  const int tabWidth = std::max(18, availableWidth / tabCount);
+  const int innerPadding = 3;
+
+  int fontId = UI_10_FONT_ID;
   for (const auto& tab : tabs) {
-    const int textWidth = renderer.getTextWidth(UI_10_FONT_ID, tab.label, EpdFontFamily::REGULAR);
+    if (renderer.getTextWidth(fontId, tab.label, EpdFontFamily::REGULAR) > tabWidth - innerPadding * 2) {
+      fontId = SMALL_FONT_ID;
+      break;
+    }
+  }
+
+  const int textY = rect.y + std::max(0, (rect.height - renderer.getLineHeight(fontId)) / 2);
+  int currentX = rect.x + edgePadding;
+
+  for (int index = 0; index < tabCount; ++index) {
+    const auto& tab = tabs[index];
+    const int slotX = currentX;
+    const int slotW = (index == tabCount - 1) ? (rect.x + rect.width - edgePadding - slotX) : tabWidth;
+    auto label = renderer.truncatedText(fontId, tab.label, std::max(0, slotW - innerPadding * 2));
+    const int textWidth = renderer.getTextWidth(fontId, label.c_str(), EpdFontFamily::REGULAR);
 
     if (tab.selected) {
       if (selected) {
-        renderer.fillRoundedRect(currentX, rect.y + 1, textWidth + 2 * hPaddingInSelection, rect.height - 4,
-                                 cornerRadius, Color::Black);
+        renderer.fillRoundedRect(slotX, rect.y + 1, slotW, rect.height - 4, cornerRadius, Color::Black);
       } else {
-        renderer.fillRectDither(currentX, rect.y, textWidth + 2 * hPaddingInSelection, rect.height - 3,
-                                Color::LightGray);
-        renderer.drawLine(currentX, rect.y + rect.height - 3, currentX + textWidth + 2 * hPaddingInSelection,
-                          rect.y + rect.height - 3, 2, true);
+        renderer.fillRectDither(slotX, rect.y, slotW, rect.height - 3, Color::LightGray);
+        renderer.drawLine(slotX, rect.y + rect.height - 3, slotX + slotW, rect.y + rect.height - 3, 2, true);
       }
     }
 
-    renderer.drawText(UI_10_FONT_ID, currentX + hPaddingInSelection, textY, tab.label, !(tab.selected && selected),
-                      EpdFontFamily::REGULAR);
+    renderer.drawText(fontId, slotX + std::max(0, (slotW - textWidth) / 2), textY, label.c_str(),
+                      !(tab.selected && selected), EpdFontFamily::REGULAR);
 
-    currentX += textWidth + LyraMetrics::values.tabSpacing + 2 * hPaddingInSelection;
+    currentX += slotW + slotSpacing;
   }
 
   renderer.drawLine(rect.x, rect.y + rect.height - 1, rect.x + rect.width - 1, rect.y + rect.height - 1, true);
