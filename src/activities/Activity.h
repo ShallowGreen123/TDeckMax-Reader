@@ -43,7 +43,7 @@ class Activity {
   virtual bool skipLoopDelay() { return false; }
   virtual bool preventAutoSleep() { return false; }
   virtual bool isReaderActivity() const { return false; }
-  virtual HalDisplay::RefreshMode defaultRefreshMode() const { return HalDisplay::FULL_REFRESH; }
+  virtual HalDisplay::RefreshMode defaultRefreshMode() const { return HalDisplay::FAST_REFRESH; }
 
   // Start a new activity without destroying the current one
   // Note: requestUpdate() will be invoked automatically once resultHandler finishes
