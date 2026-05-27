@@ -1,5 +1,6 @@
 #include "ZipFile.h"
 
+#include <Arduino.h>
 #include <HalStorage.h>
 #include <InflateReader.h>
 #include <Logging.h>
@@ -17,6 +18,7 @@ struct ZipInflateCtx {
 namespace {
 constexpr uint16_t ZIP_METHOD_STORED = 0;
 constexpr uint16_t ZIP_METHOD_DEFLATED = 8;
+constexpr size_t ZIP_STREAM_YIELD_INTERVAL = 32 * 1024;
 
 // RAII zip: opens the zip if not already open, closes on destruction only if
 // it performed the open.  Removes the wasOpen/close boilerplate from every method.
@@ -464,6 +466,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
     }
 
     size_t remaining = inflatedDataSize;
+    size_t bytesSinceYield = 0;
     while (remaining > 0) {
       const size_t dataRead = file.read(buffer, remaining < chunkSize ? remaining : chunkSize);
       if (dataRead == 0) {
@@ -478,6 +481,11 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
         return false;
       }
       remaining -= dataRead;
+      bytesSinceYield += dataRead;
+      if (bytesSinceYield >= ZIP_STREAM_YIELD_INTERVAL) {
+        delay(1);
+        bytesSinceYield = 0;
+      }
     }
 
     free(buffer);
@@ -514,6 +522,7 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
 
     bool success = false;
     size_t totalProduced = 0;
+    size_t bytesSinceYield = 0;
 
     while (true) {
       size_t produced;
@@ -530,6 +539,11 @@ bool ZipFile::readFileToStream(const char* filename, Print& out, const size_t ch
         if (out.write(outputBuffer, produced) != produced) {
           LOG_ERR("ZIP", "Failed to write all output bytes to stream");
           break;
+        }
+        bytesSinceYield += produced;
+        if (bytesSinceYield >= ZIP_STREAM_YIELD_INTERVAL) {
+          delay(1);
+          bytesSinceYield = 0;
         }
       }
 

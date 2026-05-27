@@ -1,5 +1,6 @@
 #include "PngToBmpConverter.h"
 
+#include <Arduino.h>
 #include <HalDisplay.h>
 #include <HalStorage.h>
 #include <InflateReader.h>
@@ -17,6 +18,7 @@ constexpr bool USE_8BIT_OUTPUT = false;
 constexpr bool USE_ATKINSON = true;
 constexpr bool USE_FLOYD_STEINBERG = false;
 constexpr bool USE_PRESCALE = true;
+constexpr int PNG_ROW_YIELD_INTERVAL = 16;
 // ============================================================================
 
 // BMP writing helpers (same as JpegToBmpConverter)
@@ -801,6 +803,10 @@ bool PngToBmpConverter::pngFileToBmpStreamInternal(FsFile& pngFile, Print& bmpOu
     uint8_t* temp = ctx.previousRow;
     ctx.previousRow = ctx.currentRow;
     ctx.currentRow = temp;
+
+    if (((y + 1) % PNG_ROW_YIELD_INTERVAL) == 0) {
+      delay(1);
+    }
   }
 
   // Clean up

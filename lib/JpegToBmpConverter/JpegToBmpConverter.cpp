@@ -1,5 +1,6 @@
 #include "JpegToBmpConverter.h"
 
+#include <Arduino.h>
 #include <HalDisplay.h>
 #include <HalStorage.h>
 #include <JPEGDEC.h>
@@ -164,6 +165,7 @@ namespace {
 constexpr int MAX_MCU_HEIGHT = 16;
 constexpr size_t JPEG_DECODER_SIZE = 20 * 1024;
 constexpr size_t MIN_FREE_HEAP = JPEG_DECODER_SIZE + 32 * 1024;
+constexpr int JPEG_ROW_YIELD_INTERVAL = 16;
 
 // Static file pointer for JPEGDEC open callback.
 // Safe in single-threaded embedded context; never accessed concurrently.
@@ -263,6 +265,9 @@ static void writeOutputRow(BmpConvertCtx* ctx, const uint8_t* srcRow, int outY) 
   }
 
   ctx->bmpOut->write(ctx->bmpRow, ctx->bytesPerRow);
+  if (((outY + 1) % JPEG_ROW_YIELD_INTERVAL) == 0) {
+    delay(1);
+  }
 }
 
 // Flush one scaled output row from Y-axis accumulators and advance currentOutY
@@ -303,6 +308,9 @@ static void flushScaledRow(BmpConvertCtx* ctx) {
 
   ctx->bmpOut->write(ctx->bmpRow, ctx->bytesPerRow);
   ctx->currentOutY++;
+  if ((ctx->currentOutY % JPEG_ROW_YIELD_INTERVAL) == 0) {
+    delay(1);
+  }
 }
 
 // JPEGDEC draw callback — receives one MCU-width × MCU-height block at a time,
