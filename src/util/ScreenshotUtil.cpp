@@ -6,6 +6,8 @@
 #include <HalStorage.h>
 #include <Logging.h>
 
+#include <cstring>
+#include <memory>
 #include <string>
 
 #include "Bitmap.h"  // Required for BmpHeader struct definition
@@ -14,8 +16,7 @@ void ScreenshotUtil::takeScreenshot(GfxRenderer& renderer) {
   const uint8_t* fb = renderer.getFrameBuffer();
   if (fb) {
     String filename_str = "/screenshots/screenshot-" + String(millis()) + ".bmp";
-    if (ScreenshotUtil::saveFramebufferAsBmp(filename_str.c_str(), fb, renderer.getDisplayWidth(),
-                                             renderer.getDisplayHeight())) {
+    if (ScreenshotUtil::saveFramebufferAsBmp(filename_str.c_str(), renderer)) {
       LOG_DBG("SCR", "Screenshot saved to %s", filename_str.c_str());
     } else {
       LOG_ERR("SCR", "Failed to save screenshot");
@@ -26,7 +27,7 @@ void ScreenshotUtil::takeScreenshot(GfxRenderer& renderer) {
 
   // Display a border around the screen to indicate a screenshot was taken
   if (renderer.storeBwBuffer()) {
-    renderer.drawRect(6, 6, renderer.getDisplayHeight() - 12, renderer.getDisplayWidth() - 12, 2, true);
+    renderer.drawRect(6, 6, renderer.getScreenWidth() - 12, renderer.getScreenHeight() - 12, 2, true);
     renderer.displayBuffer();
     delay(1000);
     renderer.restoreBwBuffer();
@@ -34,14 +35,40 @@ void ScreenshotUtil::takeScreenshot(GfxRenderer& renderer) {
   }
 }
 
-bool ScreenshotUtil::saveFramebufferAsBmp(const char* filename, const uint8_t* framebuffer, int width, int height) {
+namespace {
+void rotateCoordinates(const GfxRenderer::Orientation orientation, const int x, const int y, int& phyX, int& phyY,
+                       const int panelWidth, const int panelHeight) {
+  switch (orientation) {
+    case GfxRenderer::Portrait:
+      phyX = x;
+      phyY = y;
+      break;
+    case GfxRenderer::LandscapeClockwise:
+      phyX = y;
+      phyY = panelHeight - 1 - x;
+      break;
+    case GfxRenderer::PortraitInverted:
+      phyX = panelWidth - 1 - x;
+      phyY = panelHeight - 1 - y;
+      break;
+    case GfxRenderer::LandscapeCounterClockwise:
+      phyX = panelWidth - 1 - y;
+      phyY = x;
+      break;
+  }
+}
+}  // namespace
+
+bool ScreenshotUtil::saveFramebufferAsBmp(const char* filename, const GfxRenderer& renderer) {
+  const uint8_t* framebuffer = renderer.getFrameBuffer();
   if (!framebuffer) {
     return false;
   }
-
-  // Note: the width and height, we rotate the image 90d counter-clockwise to match the default display orientation
-  int phyWidth = height;
-  int phyHeight = width;
+  const int logicalWidth = renderer.getScreenWidth();
+  const int logicalHeight = renderer.getScreenHeight();
+  const int physicalWidth = renderer.getDisplayWidth();
+  const int physicalHeight = renderer.getDisplayHeight();
+  const int physicalStride = renderer.getDisplayWidthBytes();
 
   std::string path(filename);
   size_t last_slash = path.find_last_of('/');
@@ -61,8 +88,7 @@ bool ScreenshotUtil::saveFramebufferAsBmp(const char* filename, const uint8_t* f
   }
 
   BmpHeader header;
-
-  createBmpHeader(&header, phyWidth, phyHeight, BmpRowOrder::BottomUp);
+  createBmpHeader(&header, logicalWidth, logicalHeight, BmpRowOrder::BottomUp);
 
   bool write_error = false;
   if (file.write(reinterpret_cast<uint8_t*>(&header), sizeof(header)) != sizeof(header)) {
@@ -76,36 +102,31 @@ bool ScreenshotUtil::saveFramebufferAsBmp(const char* filename, const uint8_t* f
     return false;
   }
 
-  const uint32_t rowSizePadded = (phyWidth + 31) / 32 * 4;
-  // Max row size for 528px height (X3) after rotation = 68 bytes; use fixed buffer to avoid VLA
-  constexpr size_t kMaxRowSize = 68;
-  if (rowSizePadded > kMaxRowSize) {
-    LOG_ERR("SCR", "Row size %u exceeds buffer capacity", rowSizePadded);
-    // Explicitly close() file before calling Storage.remove()
+  const uint32_t rowSizePadded = (logicalWidth + 31) / 32 * 4;
+  auto rowBuffer = std::make_unique<uint8_t[]>(rowSizePadded);
+  if (!rowBuffer) {
     file.close();
     Storage.remove(filename);
     return false;
   }
 
-  // rotate the image 90d counter-clockwise on-the-fly while writing to save memory
-  uint8_t rowBuffer[kMaxRowSize];
-  memset(rowBuffer, 0, rowSizePadded);
+  for (int outY = 0; outY < logicalHeight; ++outY) {
+    std::memset(rowBuffer.get(), 0, rowSizePadded);
+    const int logicalY = logicalHeight - 1 - outY;
 
-  for (int outY = 0; outY < phyHeight; outY++) {
-    for (int outX = 0; outX < phyWidth; outX++) {
-      // 90d counter-clockwise: source (srcX, srcY)
-      // BMP rows are bottom-to-top, so outY=0 is the bottom of the displayed image
-      int srcX = width - 1 - outY;     // phyHeight == width
-      int srcY = phyWidth - 1 - outX;  // phyWidth == height
-      int fbIndex = srcY * (width / 8) + (srcX / 8);
-      uint8_t pixel = (framebuffer[fbIndex] >> (7 - (srcX % 8))) & 0x01;
-      rowBuffer[outX / 8] |= pixel << (7 - (outX % 8));
+    for (int logicalX = 0; logicalX < logicalWidth; ++logicalX) {
+      int phyX = 0;
+      int phyY = 0;
+      rotateCoordinates(renderer.getOrientation(), logicalX, logicalY, phyX, phyY, physicalWidth, physicalHeight);
+      const int fbIndex = phyY * physicalStride + (phyX / 8);
+      const uint8_t pixel = static_cast<uint8_t>((framebuffer[fbIndex] >> (7 - (phyX % 8))) & 0x01);
+      rowBuffer[logicalX / 8] |= static_cast<uint8_t>(pixel << (7 - (logicalX % 8)));
     }
-    if (file.write(rowBuffer, rowSizePadded) != rowSizePadded) {
+
+    if (file.write(rowBuffer.get(), rowSizePadded) != rowSizePadded) {
       write_error = true;
       break;
     }
-    memset(rowBuffer, 0, rowSizePadded);  // Clear the buffer for the next row
   }
 
   // Explicitly close() file before calling Storage.remove()

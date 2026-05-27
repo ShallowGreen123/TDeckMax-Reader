@@ -1,9 +1,8 @@
 #pragma once
 
 #include <Arduino.h>
+#include <IoExpanderXL9555.hpp>
 #include <stdint.h>
-
-class ExtensionIOXL9555;
 
 typedef void (*HynTouchKeyCallback)(uint8_t key_id, bool pressed, void *user_data);
 typedef bool (*HynTouchVirtualGpioWriteCallback)(uint32_t gpio_id, bool value, void *user_data);
@@ -35,5 +34,5 @@ void hyn_touch_set_virtual_gpio_callbacks(
     HynTouchVirtualGpioWriteCallback write_callback,
     HynTouchVirtualGpioReadCallback read_callback,
     void *user_data);
-void hyn_touch_attach_xl9555(ExtensionIOXL9555 *io);
+void hyn_touch_attach_xl9555(IoExpanderXL9555 *io);
 void hyn_sleep();

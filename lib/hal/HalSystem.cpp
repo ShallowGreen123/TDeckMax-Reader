@@ -5,10 +5,8 @@
 #include "Arduino.h"
 #include "HalStorage.h"
 #include "Logging.h"
-#include "esp_debug_helpers.h"
-#include "esp_private/esp_cpu_internal.h"
-#include "esp_private/esp_system_attr.h"
-#include "esp_private/panic_internal.h"
+#include "esp_attr.h"
+#include "esp_system.h"
 
 #define MAX_PANIC_STACK_DEPTH 32
 
@@ -34,36 +32,9 @@ void IRAM_ATTR __wrap_panic_abort(const char* message) {
 }
 
 void IRAM_ATTR __wrap_panic_print_backtrace(const void* frame, int core) {
-  if (!frame) {
-    __real_panic_print_backtrace(frame, core);
-    return;
-  }
   for (size_t i = 0; i < MAX_PANIC_STACK_DEPTH; i++) {
     panicStack[i].sp = 0;
   }
-
-  // Copied from components/esp_system/port/arch/riscv/panic_arch.c
-  uint32_t sp = (uint32_t)((RvExcFrame*)frame)->sp;
-  const int per_line = 8;
-  int depth = 0;
-  for (int x = 0; x < 1024; x += per_line * sizeof(uint32_t)) {
-    uint32_t* spp = (uint32_t*)(sp + x);
-    // panic_print_hex(sp + x);
-    // panic_print_str(": ");
-    panicStack[depth].sp = sp + x;
-    for (int y = 0; y < per_line; y++) {
-      // panic_print_str("0x");
-      // panic_print_hex(spp[y]);
-      // panic_print_str(y == per_line - 1 ? "\r\n" : " ");
-      panicStack[depth].spp[y] = spp[y];
-    }
-
-    depth++;
-    if (depth >= MAX_PANIC_STACK_DEPTH) {
-      break;
-    }
-  }
-
   __real_panic_print_backtrace(frame, core);
 }
 }
@@ -142,7 +113,15 @@ std::string getPanicInfo(bool full) {
 
 bool isRebootFromPanic() {
   const auto resetReason = esp_reset_reason();
-  return resetReason == ESP_RST_PANIC || resetReason == ESP_RST_CPU_LOCKUP;
+  if (resetReason == ESP_RST_PANIC) {
+    return true;
+  }
+#ifdef ESP_RST_CPU_LOCKUP
+  if (resetReason == ESP_RST_CPU_LOCKUP) {
+    return true;
+  }
+#endif
+  return false;
 }
 
 }  // namespace HalSystem

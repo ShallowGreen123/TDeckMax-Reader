@@ -2,9 +2,9 @@
 
 #include <HTTPClient.h>
 #include <Logging.h>
-#include <NetworkClient.h>
-#include <NetworkClientSecure.h>
 #include <StreamString.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <base64.h>
 
 #include <cstring>
@@ -53,13 +53,13 @@ class FileWriteStream final : public Stream {
 
 bool HttpDownloader::fetchUrl(const std::string& url, Stream& outContent, const std::string& username,
                               const std::string& password) {
-  std::unique_ptr<NetworkClient> client;
+  std::unique_ptr<WiFiClient> client;
   if (UrlUtils::isHttpsUrl(url)) {
-    auto* secureClient = new NetworkClientSecure();
+    auto* secureClient = new WiFiClientSecure();
     secureClient->setInsecure();
     client.reset(secureClient);
   } else {
-    client.reset(new NetworkClient());
+    client.reset(new WiFiClient());
   }
   HTTPClient http;
 
@@ -103,13 +103,13 @@ bool HttpDownloader::fetchUrl(const std::string& url, std::string& outContent, c
 HttpDownloader::DownloadError HttpDownloader::downloadToFile(const std::string& url, const std::string& destPath,
                                                              ProgressCallback progress, const std::string& username,
                                                              const std::string& password) {
-  std::unique_ptr<NetworkClient> client;
+  std::unique_ptr<WiFiClient> client;
   if (UrlUtils::isHttpsUrl(url)) {
-    auto* secureClient = new NetworkClientSecure();
+    auto* secureClient = new WiFiClientSecure();
     secureClient->setInsecure();
     client.reset(secureClient);
   } else {
-    client.reset(new NetworkClient());
+    client.reset(new WiFiClient());
   }
   HTTPClient http;
 

@@ -1,304 +1,335 @@
 #include <HalGPIO.h>
+
+#include <Adafruit_TCA8418.h>
+#include <IoExpanderXL9555.hpp>
+#include <HynTouch.h>
 #include <Logging.h>
-#include <Preferences.h>
 #include <SPI.h>
+#include <XPowersLib.h>
 #include <Wire.h>
 #include <esp_sleep.h>
 
-// Global HalGPIO instance
+#include <algorithm>
+
 HalGPIO gpio;
 
-namespace X3GPIO {
+namespace {
+constexpr char KEYPAD_KEY_NONE = '\0';
+constexpr char KEYPAD_KEY_DEL = '\b';
+constexpr char KEYPAD_KEY_ENT = 'E';
+constexpr uint8_t KEYPAD_ROWS = 4;
+constexpr uint8_t KEYPAD_COLS = 10;
+constexpr uint8_t KEYBOARD_RESET_PULSE_MS = 20;
+constexpr uint8_t TOUCH_RESET_PULSE_MS = 20;
+constexpr uint8_t TOUCH_RESET_SETTLE_MS = 60;
 
-struct X3ProbeResult {
-  bool bq27220 = false;
-  bool ds3231 = false;
-  bool qmi8658 = false;
+Adafruit_TCA8418 keypad;
+IoExpanderXL9555 xl9555;
+XPowersPPM charger;
 
-  uint8_t score() const {
-    return static_cast<uint8_t>(bq27220) + static_cast<uint8_t>(ds3231) + static_cast<uint8_t>(qmi8658);
-  }
+bool xl9555Ready = false;
+bool keypadReady = false;
+bool touchReady = false;
+bool chargerReady = false;
+
+const char keymap[KEYPAD_ROWS][KEYPAD_COLS] = {
+    {'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'},
+    {'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', KEYPAD_KEY_DEL},
+    {'2', 'z', 'x', 'c', 'v', 'b', 'n', 'm', '$', KEYPAD_KEY_ENT},
+    {KEYPAD_KEY_NONE, KEYPAD_KEY_NONE, KEYPAD_KEY_NONE, KEYPAD_KEY_NONE, KEYPAD_KEY_NONE, 'U', '0', ' ', 'S', 'U'},
 };
 
-bool readI2CReg8(uint8_t addr, uint8_t reg, uint8_t* outValue) {
-  Wire.beginTransmission(addr);
-  Wire.write(reg);
-  if (Wire.endTransmission(false) != 0) {
-    return false;
-  }
-  if (Wire.requestFrom(addr, static_cast<uint8_t>(1), static_cast<uint8_t>(true)) < 1) {
-    return false;
-  }
-  *outValue = Wire.read();
-  return true;
+void deselectSharedSpiDevices() {
+  pinMode(BOARD_LORA_CS, OUTPUT);
+  digitalWrite(BOARD_LORA_CS, HIGH);
+  pinMode(BOARD_LORA_RST, OUTPUT);
+  digitalWrite(BOARD_LORA_RST, HIGH);
+  pinMode(BOARD_SD_CS, OUTPUT);
+  digitalWrite(BOARD_SD_CS, HIGH);
+  pinMode(BOARD_EPD_CS, OUTPUT);
+  digitalWrite(BOARD_EPD_CS, HIGH);
 }
 
-bool readI2CReg16LE(uint8_t addr, uint8_t reg, uint16_t* outValue) {
-  Wire.beginTransmission(addr);
-  Wire.write(reg);
-  if (Wire.endTransmission(false) != 0) {
-    return false;
-  }
-  if (Wire.requestFrom(addr, static_cast<uint8_t>(2), static_cast<uint8_t>(true)) < 2) {
-    while (Wire.available()) {
-      Wire.read();
-    }
-    return false;
-  }
-  const uint8_t lo = Wire.read();
-  const uint8_t hi = Wire.read();
-  *outValue = (static_cast<uint16_t>(hi) << 8) | lo;
-  return true;
-}
-
-bool readBQ27220CurrentMA(int16_t* outCurrent) {
-  uint16_t raw = 0;
-  if (!readI2CReg16LE(I2C_ADDR_BQ27220, BQ27220_CUR_REG, &raw)) {
-    return false;
-  }
-  *outCurrent = static_cast<int16_t>(raw);
-  return true;
-}
-
-bool probeBQ27220Signature() {
-  uint16_t soc = 0;
-  uint16_t voltageMv = 0;
-  if (!readI2CReg16LE(I2C_ADDR_BQ27220, BQ27220_SOC_REG, &soc)) {
-    return false;
-  }
-  if (soc > 100) {
-    return false;
-  }
-  if (!readI2CReg16LE(I2C_ADDR_BQ27220, BQ27220_VOLT_REG, &voltageMv)) {
-    return false;
-  }
-  return voltageMv >= 2500 && voltageMv <= 5000;
-}
-
-bool probeDS3231Signature() {
-  uint8_t sec = 0;
-  if (!readI2CReg8(I2C_ADDR_DS3231, DS3231_SEC_REG, &sec)) {
-    return false;
-  }
-  const uint8_t tensDigit = (sec >> 4) & 0x07;
-  const uint8_t onesDigit = sec & 0x0F;
-
-  return tensDigit <= 5 && onesDigit <= 9;
-}
-
-bool probeQMI8658Signature() {
-  uint8_t whoami = 0;
-  if (readI2CReg8(I2C_ADDR_QMI8658, QMI8658_WHO_AM_I_REG, &whoami) && whoami == QMI8658_WHO_AM_I_VALUE) {
-    return true;
-  }
-  if (readI2CReg8(I2C_ADDR_QMI8658_ALT, QMI8658_WHO_AM_I_REG, &whoami) && whoami == QMI8658_WHO_AM_I_VALUE) {
-    return true;
-  }
-  return false;
-}
-
-X3ProbeResult runX3ProbePass() {
-  X3ProbeResult result;
-  Wire.begin(X3_I2C_SDA, X3_I2C_SCL, X3_I2C_FREQ);
-  Wire.setTimeOut(6);
-
-  result.bq27220 = probeBQ27220Signature();
-  result.ds3231 = probeDS3231Signature();
-  result.qmi8658 = probeQMI8658Signature();
-
-  Wire.end();
-  pinMode(20, INPUT);
-  pinMode(0, INPUT);
-  return result;
-}
-
-}  // namespace X3GPIO
-
-namespace {
-constexpr char HW_NAMESPACE[] = "cphw";
-constexpr char NVS_KEY_DEV_OVERRIDE[] = "dev_ovr";  // 0=auto, 1=x4, 2=x3
-constexpr char NVS_KEY_DEV_CACHED[] = "dev_det";    // 0=unknown, 1=x4, 2=x3
-
-enum class NvsDeviceValue : uint8_t { Unknown = 0, X4 = 1, X3 = 2 };
-
-NvsDeviceValue readNvsDeviceValue(const char* key, NvsDeviceValue defaultValue) {
-  Preferences prefs;
-  if (!prefs.begin(HW_NAMESPACE, true)) {
-    return defaultValue;
-  }
-  const uint8_t raw = prefs.getUChar(key, static_cast<uint8_t>(defaultValue));
-  prefs.end();
-  if (raw > static_cast<uint8_t>(NvsDeviceValue::X3)) {
-    return defaultValue;
-  }
-  return static_cast<NvsDeviceValue>(raw);
-}
-
-void writeNvsDeviceValue(const char* key, NvsDeviceValue value) {
-  Preferences prefs;
-  if (!prefs.begin(HW_NAMESPACE, false)) {
+void initExpanderOutputs() {
+  if (!xl9555.begin(Wire, XL9555_SLAVE_ADDRESS0, BOARD_I2C_SDA, BOARD_I2C_SCL)) {
+    LOG_ERR("GPIO", "XL9555 init failed");
+    xl9555Ready = false;
     return;
   }
-  prefs.putUChar(key, static_cast<uint8_t>(value));
-  prefs.end();
+
+  xl9555Ready = true;
+
+  const uint8_t lowOutputs[] = {
+      BOARD_XL9555_00_6609_EN, BOARD_XL9555_01_LORA_EN, BOARD_XL9555_02_GPS_EN,
+      BOARD_XL9555_03_1V8_EN,  BOARD_XL9555_05_MOTOR_EN, BOARD_XL9555_06_AMPLIFIER,
+      BOARD_XL9555_10_PWRKEY_EN,
+  };
+  const uint8_t highOutputs[] = {
+      BOARD_XL9555_04_LORA_SEL,
+      BOARD_XL9555_07_TOUCH_RST,
+      BOARD_XL9555_11_KEY_RST,
+      BOARD_XL9555_12_AUDIO_SEL,
+  };
+
+  for (uint8_t pin : lowOutputs) {
+    xl9555.pinMode(pin, OUTPUT);
+    xl9555.digitalWrite(pin, LOW);
+  }
+  for (uint8_t pin : highOutputs) {
+    xl9555.pinMode(pin, OUTPUT);
+    xl9555.digitalWrite(pin, HIGH);
+  }
 }
 
-HalGPIO::DeviceType nvsToDeviceType(NvsDeviceValue value) {
-  return value == NvsDeviceValue::X3 ? HalGPIO::DeviceType::X3 : HalGPIO::DeviceType::X4;
+void resetTouchIfAvailable() {
+  if (!xl9555Ready) {
+    return;
+  }
+  xl9555.pinMode(BOARD_XL9555_07_TOUCH_RST, OUTPUT);
+  xl9555.digitalWrite(BOARD_XL9555_07_TOUCH_RST, LOW);
+  delay(TOUCH_RESET_PULSE_MS);
+  xl9555.digitalWrite(BOARD_XL9555_07_TOUCH_RST, HIGH);
+  delay(TOUCH_RESET_SETTLE_MS);
 }
 
-HalGPIO::DeviceType detectDeviceTypeWithFingerprint() {
-  // Explicit override for recovery/support:
-  // 0 = auto, 1 = force X4, 2 = force X3
-  const NvsDeviceValue overrideValue = readNvsDeviceValue(NVS_KEY_DEV_OVERRIDE, NvsDeviceValue::Unknown);
-  if (overrideValue == NvsDeviceValue::X3 || overrideValue == NvsDeviceValue::X4) {
-    LOG_INF("HW", "Device override active: %s", overrideValue == NvsDeviceValue::X3 ? "X3" : "X4");
-    return nvsToDeviceType(overrideValue);
+void resetKeyboardIfAvailable() {
+  if (!xl9555Ready) {
+    return;
   }
-
-  const NvsDeviceValue cachedValue = readNvsDeviceValue(NVS_KEY_DEV_CACHED, NvsDeviceValue::Unknown);
-  if (cachedValue == NvsDeviceValue::X3 || cachedValue == NvsDeviceValue::X4) {
-    LOG_INF("HW", "Using cached device type: %s", cachedValue == NvsDeviceValue::X3 ? "X3" : "X4");
-    return nvsToDeviceType(cachedValue);
-  }
-
-  // No cache yet: run active X3 fingerprint probe and persist result.
-  const X3GPIO::X3ProbeResult pass1 = X3GPIO::runX3ProbePass();
-  delay(2);
-  const X3GPIO::X3ProbeResult pass2 = X3GPIO::runX3ProbePass();
-
-  const uint8_t score1 = pass1.score();
-  const uint8_t score2 = pass2.score();
-  LOG_INF("HW", "X3 probe scores: pass1=%u(bq=%d rtc=%d imu=%d) pass2=%u(bq=%d rtc=%d imu=%d)", score1, pass1.bq27220,
-          pass1.ds3231, pass1.qmi8658, score2, pass2.bq27220, pass2.ds3231, pass2.qmi8658);
-  const bool x3Confirmed = (score1 >= 2) && (score2 >= 2);
-  const bool x4Confirmed = (score1 == 0) && (score2 == 0);
-
-  if (x3Confirmed) {
-    writeNvsDeviceValue(NVS_KEY_DEV_CACHED, NvsDeviceValue::X3);
-    return HalGPIO::DeviceType::X3;
-  }
-
-  if (x4Confirmed) {
-    writeNvsDeviceValue(NVS_KEY_DEV_CACHED, NvsDeviceValue::X4);
-    return HalGPIO::DeviceType::X4;
-  }
-
-  // Conservative fallback for first boot with inconclusive probes.
-  return HalGPIO::DeviceType::X4;
+  xl9555.pinMode(BOARD_XL9555_11_KEY_RST, OUTPUT);
+  xl9555.digitalWrite(BOARD_XL9555_11_KEY_RST, LOW);
+  delay(KEYBOARD_RESET_PULSE_MS);
+  xl9555.digitalWrite(BOARD_XL9555_11_KEY_RST, HIGH);
+  delay(TOUCH_RESET_SETTLE_MS);
 }
 
+void initTouch() {
+  resetTouchIfAvailable();
+  hyn_touch_attach_xl9555(&xl9555);
+  touchReady = hyn_touch_init();
+  if (!touchReady) {
+    LOG_INF("GPIO", "Touch init failed");
+  }
+}
+
+void initKeyboard() {
+  resetKeyboardIfAvailable();
+  pinMode(BOARD_KEYBOARD_INT, INPUT_PULLUP);
+  keypadReady = keypad.begin(BOARD_I2C_ADDR_KEYBOARD, &Wire);
+  if (!keypadReady) {
+    LOG_ERR("GPIO", "Keyboard init failed");
+    return;
+  }
+  keypad.matrix(KEYPAD_ROWS, KEYPAD_COLS);
+  keypad.flush();
+}
+
+void initCharger() {
+  chargerReady = charger.init(Wire, BOARD_I2C_SDA, BOARD_I2C_SCL, SY6970_SLAVE_ADDRESS);
+  if (!chargerReady) {
+    LOG_INF("GPIO", "SY6970 init failed");
+    return;
+  }
+  charger.disableADCMeasure();
+}
+
+uint8_t mapKeyToButton(const char key) {
+  switch (key) {
+    case KEYPAD_KEY_DEL:
+      return HalGPIO::BTN_BACK;
+    case KEYPAD_KEY_ENT:
+      return HalGPIO::BTN_CONFIRM;
+    case 'a':
+    case 'A':
+      return HalGPIO::BTN_LEFT;
+    case 'd':
+    case 'D':
+      return HalGPIO::BTN_RIGHT;
+    case 'w':
+    case 'W':
+      return HalGPIO::BTN_UP;
+    case 's':
+    case 'S':
+      return HalGPIO::BTN_DOWN;
+    default:
+      return HalGPIO::BUTTON_COUNT;
+  }
+}
+
+bool decodeKeypadEvent(const int event, uint8_t& outButton, bool& outPressed) {
+  if ((event & 0x7F) == 0) {
+    return false;
+  }
+
+  const int keyIndex = (event & 0x7F) - 1;
+  const int row = keyIndex / KEYPAD_COLS;
+  const int col = (KEYPAD_COLS - 1) - (keyIndex % KEYPAD_COLS);
+  if (row < 0 || row >= KEYPAD_ROWS || col < 0 || col >= KEYPAD_COLS) {
+    return false;
+  }
+
+  outPressed = (event & 0x80) != 0;
+  outButton = mapKeyToButton(keymap[row][col]);
+  return outButton < HalGPIO::BUTTON_COUNT;
+}
 }  // namespace
 
 void HalGPIO::begin() {
-  inputMgr.begin();
-  SPI.begin(EPD_SCLK, SPI_MISO, EPD_MOSI, EPD_CS);
+  pinMode(BOARD_BOOT_PIN, INPUT_PULLUP);
+  pinMode(BOARD_EPD_BL, OUTPUT);
+  analogWrite(BOARD_EPD_BL, 0);
+  pinMode(BOARD_KEYBOARD_LED, OUTPUT);
+  analogWrite(BOARD_KEYBOARD_LED, 0);
 
-  _deviceType = detectDeviceTypeWithFingerprint();
+  SPI.begin(BOARD_SPI_SCK, BOARD_SPI_MISO, BOARD_SPI_MOSI);
+  deselectSharedSpiDevices();
 
-  if (deviceIsX4()) {
-    pinMode(BAT_GPIO0, INPUT);
-    pinMode(UART0_RXD, INPUT);
-  }
+  Wire.begin(BOARD_I2C_SDA, BOARD_I2C_SCL, I2C_FREQUENCY);
+  Wire.setTimeOut(6);
+
+  initExpanderOutputs();
+  initTouch();
+  initKeyboard();
+  initCharger();
+
+  lastUsbConnected = isUsbConnected();
 }
 
 void HalGPIO::update() {
-  inputMgr.update();
+  bool nextState[BUTTON_COUNT];
+  std::copy(std::begin(buttonState), std::end(buttonState), std::begin(nextState));
+
+  std::fill(std::begin(buttonPressedEdge), std::end(buttonPressedEdge), false);
+  std::fill(std::begin(buttonReleasedEdge), std::end(buttonReleasedEdge), false);
+  anyPressed = false;
+  anyReleased = false;
+
+  if (keypadReady) {
+    while (keypad.available() > 0) {
+      uint8_t button = BUTTON_COUNT;
+      bool pressed = false;
+      if (!decodeKeypadEvent(keypad.getEvent(), button, pressed)) {
+        continue;
+      }
+      nextState[button] = pressed;
+    }
+  }
+
+  nextState[BTN_POWER] = digitalRead(BOARD_BOOT_PIN) == LOW;
+
+  const unsigned long now = millis();
+  heldTime = 0;
+  for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
+    if (nextState[i] != buttonState[i]) {
+      if (nextState[i]) {
+        buttonPressedEdge[i] = true;
+        buttonPressedSince[i] = now;
+        anyPressed = true;
+      } else {
+        buttonReleasedEdge[i] = true;
+        anyReleased = true;
+      }
+      buttonState[i] = nextState[i];
+    }
+
+    if (buttonState[i]) {
+      heldTime = std::max(heldTime, now - buttonPressedSince[i]);
+    }
+  }
+
   const bool connected = isUsbConnected();
-  usbStateChanged = (connected != lastUsbConnected);
+  usbStateChanged = connected != lastUsbConnected;
   lastUsbConnected = connected;
 }
 
-bool HalGPIO::wasUsbStateChanged() const { return usbStateChanged; }
+bool HalGPIO::isPressed(const uint8_t buttonIndex) const {
+  return buttonIndex < BUTTON_COUNT ? buttonState[buttonIndex] : false;
+}
 
-bool HalGPIO::isPressed(uint8_t buttonIndex) const { return inputMgr.isPressed(buttonIndex); }
+bool HalGPIO::wasPressed(const uint8_t buttonIndex) const {
+  return buttonIndex < BUTTON_COUNT ? buttonPressedEdge[buttonIndex] : false;
+}
 
-bool HalGPIO::wasPressed(uint8_t buttonIndex) const { return inputMgr.wasPressed(buttonIndex); }
+bool HalGPIO::wasAnyPressed() const { return anyPressed; }
 
-bool HalGPIO::wasAnyPressed() const { return inputMgr.wasAnyPressed(); }
+bool HalGPIO::wasReleased(const uint8_t buttonIndex) const {
+  return buttonIndex < BUTTON_COUNT ? buttonReleasedEdge[buttonIndex] : false;
+}
 
-bool HalGPIO::wasReleased(uint8_t buttonIndex) const { return inputMgr.wasReleased(buttonIndex); }
+bool HalGPIO::wasAnyReleased() const { return anyReleased; }
 
-bool HalGPIO::wasAnyReleased() const { return inputMgr.wasAnyReleased(); }
-
-unsigned long HalGPIO::getHeldTime() const { return inputMgr.getHeldTime(); }
+unsigned long HalGPIO::getHeldTime() const { return heldTime; }
 
 void HalGPIO::startDeepSleep() {
-  // Ensure that the power button has been released to avoid immediately turning back on if you're holding it
-  while (inputMgr.isPressed(BTN_POWER)) {
-    delay(50);
-    inputMgr.update();
+  while (isPressed(BTN_POWER)) {
+    delay(20);
+    update();
   }
-  // Arm the wakeup trigger *after* the button is released
-  esp_deep_sleep_enable_gpio_wakeup(1ULL << InputManager::POWER_BUTTON_PIN, ESP_GPIO_WAKEUP_GPIO_LOW);
-  // Enter Deep Sleep
+
+  analogWrite(BOARD_KEYBOARD_LED, 0);
+  analogWrite(BOARD_EPD_BL, 0);
+
+  if (xl9555Ready) {
+    xl9555.digitalWrite(BOARD_XL9555_06_AMPLIFIER, LOW);
+    xl9555.digitalWrite(BOARD_XL9555_05_MOTOR_EN, LOW);
+    xl9555.digitalWrite(BOARD_XL9555_01_LORA_EN, LOW);
+    xl9555.digitalWrite(BOARD_XL9555_02_GPS_EN, LOW);
+    xl9555.digitalWrite(BOARD_XL9555_03_1V8_EN, LOW);
+  }
+
+  esp_sleep_enable_ext0_wakeup(static_cast<gpio_num_t>(BOARD_BOOT_PIN), 0);
   esp_deep_sleep_start();
 }
 
-void HalGPIO::verifyPowerButtonWakeup(uint16_t requiredDurationMs, bool shortPressAllowed) {
+void HalGPIO::verifyPowerButtonWakeup(const uint16_t requiredDurationMs, const bool shortPressAllowed) {
   if (shortPressAllowed) {
-    // Fast path - no duration check needed
     return;
   }
-  // TODO: Intermittent edge case remains: a single tap followed by another single tap
-  // can still power on the device. Tighten wake debounce/state handling here.
 
-  // Calibrate: subtract boot time already elapsed, assuming button held since boot
-  const uint16_t calibration = millis();
-  const uint16_t calibratedDuration = (calibration < requiredDurationMs) ? (requiredDurationMs - calibration) : 1;
+  const uint16_t elapsedBeforeCheck = millis();
+  const uint16_t calibratedDuration =
+      elapsedBeforeCheck < requiredDurationMs ? requiredDurationMs - elapsedBeforeCheck : 1;
 
-  const auto start = millis();
-  inputMgr.update();
-  // inputMgr.isPressed() may take up to ~500ms to return correct state
-  while (!inputMgr.isPressed(BTN_POWER) && millis() - start < 1000) {
+  const unsigned long start = millis();
+  update();
+  while (!isPressed(BTN_POWER) && millis() - start < 1000) {
     delay(10);
-    inputMgr.update();
+    update();
   }
-  if (inputMgr.isPressed(BTN_POWER)) {
-    do {
-      delay(10);
-      inputMgr.update();
-    } while (inputMgr.isPressed(BTN_POWER) && inputMgr.getHeldTime() < calibratedDuration);
-    if (inputMgr.getHeldTime() < calibratedDuration) {
-      startDeepSleep();
-    }
-  } else {
+
+  if (!isPressed(BTN_POWER)) {
+    startDeepSleep();
+  }
+
+  do {
+    delay(10);
+    update();
+  } while (isPressed(BTN_POWER) && getHeldTime() < calibratedDuration);
+
+  if (getHeldTime() < calibratedDuration) {
     startDeepSleep();
   }
 }
 
-bool HalGPIO::isUsbConnected() const {
-  if (deviceIsX3()) {
-    // X3: infer USB/charging via BQ27220 Current() register (0x0C, signed mA).
-    // Positive current means charging.
-    for (uint8_t attempt = 0; attempt < 2; ++attempt) {
-      int16_t currentMa = 0;
-      if (X3GPIO::readBQ27220CurrentMA(&currentMa)) {
-        return currentMa > 0;
-      }
-      delay(2);
-    }
-    return false;
-  }
-  // U0RXD/GPIO20 reads HIGH when USB is connected
-  return digitalRead(UART0_RXD) == HIGH;
-}
+bool HalGPIO::isUsbConnected() const { return chargerReady ? charger.isVbusIn() : false; }
+
+bool HalGPIO::wasUsbStateChanged() const { return usbStateChanged; }
 
 HalGPIO::WakeupReason HalGPIO::getWakeupReason() const {
   const auto wakeupCause = esp_sleep_get_wakeup_cause();
   const auto resetReason = esp_reset_reason();
 
-  const bool usbConnected = isUsbConnected();
-
-  if ((wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED && resetReason == ESP_RST_POWERON && !usbConnected) ||
-      (wakeupCause == ESP_SLEEP_WAKEUP_GPIO && resetReason == ESP_RST_DEEPSLEEP && usbConnected)) {
+  if (wakeupCause == ESP_SLEEP_WAKEUP_EXT0 && resetReason == ESP_RST_DEEPSLEEP) {
     return WakeupReason::PowerButton;
   }
-  if (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED && resetReason == ESP_RST_UNKNOWN && usbConnected) {
+
+  if (resetReason == ESP_RST_POWERON) {
+    return isUsbConnected() ? WakeupReason::AfterUSBPower : WakeupReason::PowerButton;
+  }
+
+  if (resetReason == ESP_RST_SW || resetReason == ESP_RST_UNKNOWN) {
     return WakeupReason::AfterFlash;
   }
-  if (wakeupCause == ESP_SLEEP_WAKEUP_UNDEFINED && resetReason == ESP_RST_POWERON && usbConnected) {
-    return WakeupReason::AfterUSBPower;
-  }
+
   return WakeupReason::Other;
 }

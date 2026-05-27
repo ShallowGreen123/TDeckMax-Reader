@@ -1,12 +1,37 @@
 #pragma once
 
 #include <Print.h>
-#include <common/FsApiConstants.h>  // for oflag_t
+#include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
+
+using oflag_t = int;
+#ifndef O_RDONLY
+constexpr oflag_t O_RDONLY = 0x00;
+#endif
+#ifndef O_WRITE
+#ifdef O_WRONLY
+constexpr oflag_t O_WRITE = O_WRONLY;
+#else
+constexpr oflag_t O_WRITE = 0x01;
+#endif
+#endif
+#ifndef O_RDWR
+constexpr oflag_t O_RDWR = 0x02;
+#endif
+#ifndef O_APPEND
+constexpr oflag_t O_APPEND = 0x04;
+#endif
+#ifndef O_CREAT
+constexpr oflag_t O_CREAT = 0x08;
+#endif
+#ifndef O_TRUNC
+constexpr oflag_t O_TRUNC = 0x10;
+#endif
 
 class HalFile;
 

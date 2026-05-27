@@ -15,7 +15,7 @@
 struct DirectPixelWriter {
   uint8_t* fb;
   GfxRenderer::RenderMode mode;
-  uint16_t displayWidthBytes;  // Runtime framebuffer stride (X4: 100, X3: 99)
+  uint16_t displayWidthBytes;  // Runtime framebuffer stride in bytes
 
   // Orientation is collapsed into a linear transform:
   //   phyX = phyXBase + x * phyXStepX + y * phyXStepY
@@ -37,33 +37,6 @@ struct DirectPixelWriter {
 
     switch (renderer.getOrientation()) {
       case GfxRenderer::Portrait:
-        // phyX = y, phyY = (phyH-1) - x
-        phyXBase = 0;
-        phyYBase = phyH - 1;
-        phyXStepX = 0;
-        phyYStepX = -1;
-        phyXStepY = 1;
-        phyYStepY = 0;
-        break;
-      case GfxRenderer::LandscapeClockwise:
-        // phyX = (phyW-1) - x, phyY = (phyH-1) - y
-        phyXBase = phyW - 1;
-        phyYBase = phyH - 1;
-        phyXStepX = -1;
-        phyYStepX = 0;
-        phyXStepY = 0;
-        phyYStepY = -1;
-        break;
-      case GfxRenderer::PortraitInverted:
-        // phyX = (phyW-1) - y, phyY = x
-        phyXBase = phyW - 1;
-        phyYBase = 0;
-        phyXStepX = 0;
-        phyYStepX = 1;
-        phyXStepY = -1;
-        phyYStepY = 0;
-        break;
-      case GfxRenderer::LandscapeCounterClockwise:
         // phyX = x, phyY = y
         phyXBase = 0;
         phyYBase = 0;
@@ -72,8 +45,35 @@ struct DirectPixelWriter {
         phyXStepY = 0;
         phyYStepY = 1;
         break;
+      case GfxRenderer::LandscapeClockwise:
+        // phyX = y, phyY = (phyH-1) - x
+        phyXBase = 0;
+        phyYBase = phyH - 1;
+        phyXStepX = 0;
+        phyYStepX = -1;
+        phyXStepY = 1;
+        phyYStepY = 0;
+        break;
+      case GfxRenderer::PortraitInverted:
+        // phyX = (phyW-1) - x, phyY = (phyH-1) - y
+        phyXBase = phyW - 1;
+        phyYBase = phyH - 1;
+        phyXStepX = -1;
+        phyYStepX = 0;
+        phyXStepY = 0;
+        phyYStepY = -1;
+        break;
+      case GfxRenderer::LandscapeCounterClockwise:
+        // phyX = (phyW-1) - y, phyY = x
+        phyXBase = phyW - 1;
+        phyYBase = 0;
+        phyXStepX = 0;
+        phyYStepX = 1;
+        phyXStepY = -1;
+        phyYStepY = 0;
+        break;
       default:
-        // Fallback to LandscapeCounterClockwise (identity transform)
+        // Fallback to portrait/native orientation.
         phyXBase = 0;
         phyYBase = 0;
         phyXStepX = 1;

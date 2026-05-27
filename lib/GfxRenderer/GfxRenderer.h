@@ -22,10 +22,10 @@ class GfxRenderer {
 
   // Logical screen orientation from the perspective of callers
   enum Orientation {
-    Portrait,                  // 480x800 logical coordinates (current default)
-    LandscapeClockwise,        // 800x480 logical coordinates, rotated 180° (swap top/bottom)
-    PortraitInverted,          // 480x800 logical coordinates, inverted
-    LandscapeCounterClockwise  // 800x480 logical coordinates, native panel orientation
+    Portrait,                  // 240x320 logical coordinates (native panel orientation)
+    LandscapeClockwise,        // 320x240 logical coordinates, rotated clockwise
+    PortraitInverted,          // 240x320 logical coordinates, upside down
+    LandscapeCounterClockwise  // 320x240 logical coordinates, rotated counter-clockwise
   };
 
  private:

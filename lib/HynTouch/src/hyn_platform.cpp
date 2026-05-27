@@ -5,7 +5,7 @@
 
 #include <TDeckMaxBoard.h>
 
-#include "ExtensionIOXL9555.hpp"
+#include <IoExpanderXL9555.hpp>
 #include "HynTouch.h"
 
 namespace {
@@ -15,7 +15,7 @@ constexpr const char *kTag = "HynTouch";
 HynTouchVirtualGpioWriteCallback g_gpio_write_callback = nullptr;
 HynTouchVirtualGpioReadCallback g_gpio_read_callback = nullptr;
 void *g_gpio_callback_user_data = nullptr;
-ExtensionIOXL9555 *g_xl9555 = nullptr;
+IoExpanderXL9555 *g_xl9555 = nullptr;
 
 bool write_virtual_xl9555_gpio(uint32_t gpio_id, bool value)
 {
@@ -85,7 +85,7 @@ void hyn_touch_set_virtual_gpio_callbacks(
     g_gpio_callback_user_data = user_data;
 }
 
-void hyn_touch_attach_xl9555(ExtensionIOXL9555 *io)
+void hyn_touch_attach_xl9555(IoExpanderXL9555 *io)
 {
     g_xl9555 = io;
 }

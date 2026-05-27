@@ -1,5 +1,6 @@
 #include "PngToFramebufferConverter.h"
 
+#include <Arduino.h>
 #include <FsHelpers.h>
 #include <GfxRenderer.h>
 #include <HalStorage.h>

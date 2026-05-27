@@ -43,35 +43,56 @@ void GfxRenderer::insertFont(const int fontId, EpdFontFamily font) { fontMap.ins
 static inline void rotateCoordinates(const GfxRenderer::Orientation orientation, const int x, const int y, int* phyX,
                                      int* phyY, const uint16_t panelWidth, const uint16_t panelHeight) {
   switch (orientation) {
-    case GfxRenderer::Portrait: {
-      // Logical portrait (480x800) → panel (800x480)
-      // Rotation: 90 degrees clockwise
-      *phyX = y;
-      *phyY = panelHeight - 1 - x;
-      break;
-    }
-    case GfxRenderer::LandscapeClockwise: {
-      // Logical landscape (800x480) rotated 180 degrees (swap top/bottom and left/right)
-      *phyX = panelWidth - 1 - x;
-      *phyY = panelHeight - 1 - y;
-      break;
-    }
-    case GfxRenderer::PortraitInverted: {
-      // Logical portrait (480x800) → panel (800x480)
-      // Rotation: 90 degrees counter-clockwise
-      *phyX = panelWidth - 1 - y;
-      *phyY = x;
-      break;
-    }
-    case GfxRenderer::LandscapeCounterClockwise: {
-      // Logical landscape (800x480) aligned with panel orientation
+    case GfxRenderer::Portrait:
       *phyX = x;
       *phyY = y;
       break;
+    case GfxRenderer::LandscapeClockwise:
+      *phyX = y;
+      *phyY = panelHeight - 1 - x;
+      break;
+    case GfxRenderer::PortraitInverted:
+      *phyX = panelWidth - 1 - x;
+      *phyY = panelHeight - 1 - y;
+      break;
+    case GfxRenderer::LandscapeCounterClockwise:
+      *phyX = panelWidth - 1 - y;
+      *phyY = x;
+      break;
+  }
+}
+static void drawPackedMonoBitmap(const GfxRenderer& renderer, const uint8_t* bitmap, const int x, const int y,
+                                 const int width, const int height, const bool transparent) {
+  if (!bitmap || width <= 0 || height <= 0) {
+    return;
+  }
+  const int screenWidth = renderer.getScreenWidth();
+  const int screenHeight = renderer.getScreenHeight();
+  const int startX = std::max(0, x);
+  const int startY = std::max(0, y);
+  const int endX = std::min(screenWidth, x + width);
+  const int endY = std::min(screenHeight, y + height);
+  if (startX >= endX || startY >= endY) {
+    return;
+  }
+  const int rowBytes = (width + 7) / 8;
+  for (int screenY = startY; screenY < endY; ++screenY) {
+    const int srcY = screenY - y;
+    for (int screenX = startX; screenX < endX; ++screenX) {
+      const int srcX = screenX - x;
+      const uint32_t index = static_cast<uint32_t>(srcY) * rowBytes + (srcX / 8);
+      const uint8_t byte = bitmap[index];
+      const bool black = (byte & (0x80 >> (srcX & 0x07))) == 0;
+      if (transparent) {
+        if (black) {
+          renderer.drawPixel(screenX, screenY, true);
+        }
+      } else {
+        renderer.drawPixel(screenX, screenY, black);
+      }
     }
   }
 }
-
 enum class TextRotation { None, Rotated90CW };
 
 // Shared glyph rendering logic for normal and rotated text.
@@ -641,32 +662,11 @@ void GfxRenderer::fillRoundedRect(const int x, const int y, const int width, con
 }
 
 void GfxRenderer::drawImage(const uint8_t bitmap[], const int x, const int y, const int width, const int height) const {
-  int rotatedX = 0;
-  int rotatedY = 0;
-  rotateCoordinates(orientation, x, y, &rotatedX, &rotatedY, panelWidth, panelHeight);
-  // Rotate origin corner
-  switch (orientation) {
-    case Portrait:
-      rotatedY = rotatedY - height;
-      break;
-    case PortraitInverted:
-      rotatedX = rotatedX - width;
-      break;
-    case LandscapeClockwise:
-      rotatedY = rotatedY - height;
-      rotatedX = rotatedX - width;
-      break;
-    case LandscapeCounterClockwise:
-      break;
-  }
-  // TODO: Rotate bits
-  display.drawImage(bitmap, rotatedX, rotatedY, width, height);
+  drawPackedMonoBitmap(*this, bitmap, x, y, width, height, false);
 }
-
 void GfxRenderer::drawIcon(const uint8_t bitmap[], const int x, const int y, const int width, const int height) const {
-  display.drawImageTransparent(bitmap, y, getScreenWidth() - width - x, height, width);
+  drawPackedMonoBitmap(*this, bitmap, x, y, width, height, true);
 }
-
 void GfxRenderer::drawBitmap(const Bitmap& bitmap, const int x, const int y, const int maxWidth, const int maxHeight,
                              const float cropX, const float cropY) const {
   if (fontCacheManager_ && fontCacheManager_->isScanning()) return;
@@ -1016,35 +1016,28 @@ std::vector<std::string> GfxRenderer::wrappedText(const int fontId, const char* 
   return lines;
 }
 
-// Note: Internal driver treats screen in command orientation; this library exposes a logical orientation
 int GfxRenderer::getScreenWidth() const {
   switch (orientation) {
     case Portrait:
     case PortraitInverted:
-      // 480px wide in portrait logical coordinates
-      return panelHeight;
-    case LandscapeClockwise:
-    case LandscapeCounterClockwise:
-      // 800px wide in landscape logical coordinates
-      return panelWidth;
-  }
-  return panelHeight;
-}
-
-int GfxRenderer::getScreenHeight() const {
-  switch (orientation) {
-    case Portrait:
-    case PortraitInverted:
-      // 800px tall in portrait logical coordinates
       return panelWidth;
     case LandscapeClockwise:
     case LandscapeCounterClockwise:
-      // 480px tall in landscape logical coordinates
       return panelHeight;
   }
   return panelWidth;
 }
-
+int GfxRenderer::getScreenHeight() const {
+  switch (orientation) {
+    case Portrait:
+    case PortraitInverted:
+      return panelHeight;
+    case LandscapeClockwise:
+    case LandscapeCounterClockwise:
+      return panelWidth;
+  }
+  return panelHeight;
+}
 int GfxRenderer::getSpaceWidth(const int fontId, const EpdFontFamily::Style style) const {
   const auto fontIt = fontMap.find(fontId);
   if (fontIt == fontMap.end()) {

@@ -18,9 +18,9 @@ const char* FIXED_DATE = "Thu, 01 Jan 2024 00:00:00 GMT";
 
 // ── RequestHandler interface ─────────────────────────────────────────────────
 
-bool WebDAVHandler::canHandle(WebServer& server, HTTPMethod method, const String& uri) {
-  (void)server;
+bool WebDAVHandler::canHandle(HTTPMethod method, String uri) {
   (void)uri;
+  _lastMethod = method;
   switch (method) {
     case HTTP_OPTIONS:
     case HTTP_PROPFIND:
@@ -39,12 +39,12 @@ bool WebDAVHandler::canHandle(WebServer& server, HTTPMethod method, const String
   }
 }
 
-bool WebDAVHandler::canRaw(WebServer& server, const String& uri) {
+bool WebDAVHandler::canRaw(String uri) {
   (void)uri;
-  return server.method() == HTTP_PUT;
+  return _lastMethod == HTTP_PUT;
 }
 
-void WebDAVHandler::raw(WebServer& server, const String& uri, HTTPRaw& raw) {
+void WebDAVHandler::raw(WebServer& server, String uri, HTTPRaw& raw) {
   (void)uri;
   if (raw.status == RAW_START) {
     _putPath = getRequestPath(server);
@@ -115,7 +115,7 @@ void WebDAVHandler::raw(WebServer& server, const String& uri, HTTPRaw& raw) {
   }
 }
 
-bool WebDAVHandler::handle(WebServer& server, HTTPMethod method, const String& uri) {
+bool WebDAVHandler::handle(WebServer& server, HTTPMethod method, String uri) {
   (void)uri;
   switch (method) {
     case HTTP_OPTIONS:
@@ -327,7 +327,7 @@ void WebDAVHandler::handleGet(WebServer& s) {
   s.setContentLength(file.size());
   s.send(200, contentType.c_str(), "");
 
-  NetworkClient client = s.client();
+  WiFiClient client = s.client();
   client.write(file);
   file.close();
 }

@@ -1,5 +1,6 @@
 #include "Epub.h"
 
+#include <Arduino.h>
 #include <FsHelpers.h>
 #include <HalStorage.h>
 #include <JpegToBmpConverter.h>

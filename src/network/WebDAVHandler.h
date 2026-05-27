@@ -6,10 +6,10 @@
 class WebDAVHandler : public RequestHandler {
  public:
   // RequestHandler interface
-  bool canHandle(WebServer& server, HTTPMethod method, const String& uri) override;
-  bool canRaw(WebServer& server, const String& uri) override;
-  void raw(WebServer& server, const String& uri, HTTPRaw& raw) override;
-  bool handle(WebServer& server, HTTPMethod method, const String& uri) override;
+  bool canHandle(HTTPMethod method, String uri) override;
+  bool canRaw(String uri) override;
+  void raw(WebServer& server, String uri, HTTPRaw& raw) override;
+  bool handle(WebServer& server, HTTPMethod method, String uri) override;
 
  private:
   // PUT streaming state (raw() is called in chunks)
@@ -17,6 +17,7 @@ class WebDAVHandler : public RequestHandler {
   String _putPath;
   bool _putOk = false;
   bool _putExisted = false;
+  HTTPMethod _lastMethod = HTTP_ANY;
 
   // WebDAV method handlers
   void handleOptions(WebServer& s);

@@ -1,4 +1,5 @@
 #pragma once
+#include <Arduino.h>
 #include <HalStorage.h>
 
 #include <functional>
@@ -6,7 +7,7 @@
 
 /**
  * HTTP client utility for fetching content and downloading files.
- * Wraps NetworkClientSecure and HTTPClient for HTTPS requests.
+ * Wraps WiFiClientSecure and HTTPClient for HTTPS requests.
  */
 class HttpDownloader {
  public:
