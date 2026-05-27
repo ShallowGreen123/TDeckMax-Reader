@@ -48,6 +48,7 @@ HalDisplay::HalDisplay()
 HalDisplay::~HalDisplay() {
   free(frameBuffer);
   free(lastDisplayedBuffer);
+  free(partialRefreshBuffer);
   free(grayscaleLsbBuffer);
   free(grayscaleMsbBuffer);
   free(ditherBuffer);
@@ -60,17 +61,20 @@ void HalDisplay::ensureBuffers() {
 
   frameBuffer = static_cast<uint8_t*>(malloc(BUFFER_SIZE));
   lastDisplayedBuffer = static_cast<uint8_t*>(malloc(BUFFER_SIZE));
+  partialRefreshBuffer = static_cast<uint8_t*>(malloc(BUFFER_SIZE));
   grayscaleLsbBuffer = static_cast<uint8_t*>(malloc(BUFFER_SIZE));
   grayscaleMsbBuffer = static_cast<uint8_t*>(malloc(BUFFER_SIZE));
   ditherBuffer = static_cast<uint8_t*>(malloc(BUFFER_SIZE));
 
-  if (!frameBuffer || !lastDisplayedBuffer || !grayscaleLsbBuffer || !grayscaleMsbBuffer || !ditherBuffer) {
+  if (!frameBuffer || !lastDisplayedBuffer || !partialRefreshBuffer || !grayscaleLsbBuffer || !grayscaleMsbBuffer ||
+      !ditherBuffer) {
     LOG_ERR("DISP", "Framebuffer allocation failed");
     assert(false);
   }
 
   memset(frameBuffer, 0xFF, BUFFER_SIZE);
   memset(lastDisplayedBuffer, 0xFF, BUFFER_SIZE);
+  memset(partialRefreshBuffer, 0xFF, BUFFER_SIZE);
   memset(grayscaleLsbBuffer, 0x00, BUFFER_SIZE);
   memset(grayscaleMsbBuffer, 0x00, BUFFER_SIZE);
   memset(ditherBuffer, 0xFF, BUFFER_SIZE);
@@ -105,6 +109,19 @@ void HalDisplay::setBufferPixel(uint8_t* buffer, const uint16_t x, const uint16_
     buffer[byteIndex] &= static_cast<uint8_t>(~bitMask);
   } else {
     buffer[byteIndex] |= bitMask;
+  }
+}
+
+void HalDisplay::copyRectBuffer(const uint8_t* sourceBuffer, const DirtyRect& rect, uint8_t* targetBuffer) {
+  if (!sourceBuffer || !targetBuffer || !rect.hasChanges) {
+    return;
+  }
+
+  const uint16_t rectWidthBytes = (rect.w + 7) / 8;
+  for (uint16_t row = 0; row < rect.h; row++) {
+    const uint32_t sourceOffset = static_cast<uint32_t>(rect.y + row) * DISPLAY_WIDTH_BYTES + (rect.x / 8);
+    const uint32_t targetOffset = static_cast<uint32_t>(row) * rectWidthBytes;
+    memcpy(targetBuffer + targetOffset, sourceBuffer + sourceOffset, rectWidthBytes);
   }
 }
 
@@ -163,19 +180,81 @@ void HalDisplay::flushBuffer(const uint8_t* buffer, RefreshMode mode, const bool
   deselectSharedSpiDevices();
 
   if (requireFullRefresh || mode == FULL_REFRESH) {
-    epd.setFullWindow();
-    epd.writeImage(buffer, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, false, false, false);
-    epd.refresh(false);
+    epd.epd2.writeImageForFullRefresh(buffer, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, false, false, false);
+    epd.epd2.refresh(false);
     requireFullRefresh = false;
   } else {
-    epd.setPartialWindow(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-    epd.writeImage(buffer, 0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT, false, false, false);
-    epd.refresh(true);
+    const DirtyRect dirtyRect = calculateDirtyRect(lastDisplayedBuffer, buffer);
+    if (dirtyRect.hasChanges) {
+      const uint32_t dirtyBufferSize = static_cast<uint32_t>((dirtyRect.w + 7) / 8) * dirtyRect.h;
+      memset(partialRefreshBuffer, 0xFF, dirtyBufferSize);
+      copyRectBuffer(buffer, dirtyRect, partialRefreshBuffer);
+
+      epd.setPartialWindow(dirtyRect.x, dirtyRect.y, dirtyRect.w, dirtyRect.h);
+      epd.firstPage();
+      do {
+        epd.drawInvertedBitmap(dirtyRect.x, dirtyRect.y, partialRefreshBuffer, dirtyRect.w, dirtyRect.h, GxEPD_BLACK);
+      } while (epd.nextPage());
+    }
   }
 
   if (turnOffScreen) {
     epd.powerOff();
   }
+}
+
+HalDisplay::DirtyRect HalDisplay::calculateDirtyRect(const uint8_t* previousBuffer, const uint8_t* currentBuffer) {
+  DirtyRect dirtyRect;
+  if (!previousBuffer || !currentBuffer) {
+    dirtyRect.w = DISPLAY_WIDTH;
+    dirtyRect.h = DISPLAY_HEIGHT;
+    dirtyRect.hasChanges = true;
+    return dirtyRect;
+  }
+
+  int16_t firstChangedRow = -1;
+  int16_t lastChangedRow = -1;
+  uint16_t leftChangedByte = DISPLAY_WIDTH_BYTES;
+  int16_t rightChangedByte = -1;
+
+  for (uint16_t y = 0; y < DISPLAY_HEIGHT; y++) {
+    const uint32_t rowOffset = static_cast<uint32_t>(y) * DISPLAY_WIDTH_BYTES;
+    int16_t rowFirstChangedByte = -1;
+    int16_t rowLastChangedByte = -1;
+
+    for (uint16_t byteIndex = 0; byteIndex < DISPLAY_WIDTH_BYTES; byteIndex++) {
+      if (previousBuffer[rowOffset + byteIndex] == currentBuffer[rowOffset + byteIndex]) {
+        continue;
+      }
+      if (rowFirstChangedByte < 0) {
+        rowFirstChangedByte = static_cast<int16_t>(byteIndex);
+      }
+      rowLastChangedByte = static_cast<int16_t>(byteIndex);
+    }
+
+    if (rowFirstChangedByte < 0) {
+      continue;
+    }
+
+    if (firstChangedRow < 0) {
+      firstChangedRow = static_cast<int16_t>(y);
+    }
+    lastChangedRow = static_cast<int16_t>(y);
+    leftChangedByte = std::min(leftChangedByte, static_cast<uint16_t>(rowFirstChangedByte));
+    rightChangedByte = std::max(rightChangedByte, rowLastChangedByte);
+  }
+
+  if (firstChangedRow < 0 || rightChangedByte < 0) {
+    return dirtyRect;
+  }
+
+  dirtyRect.x = leftChangedByte * 8;
+  dirtyRect.y = static_cast<uint16_t>(firstChangedRow);
+  dirtyRect.w =
+      std::min<uint16_t>(DISPLAY_WIDTH - dirtyRect.x, static_cast<uint16_t>(rightChangedByte - leftChangedByte + 1) * 8);
+  dirtyRect.h = static_cast<uint16_t>(lastChangedRow - firstChangedRow + 1);
+  dirtyRect.hasChanges = dirtyRect.w > 0 && dirtyRect.h > 0;
+  return dirtyRect;
 }
 
 void HalDisplay::displayBuffer(const RefreshMode mode, const bool turnOffScreen) {
@@ -225,9 +304,7 @@ void HalDisplay::copyGrayscaleMsbBuffers(const uint8_t* msbBuffer) {
 }
 
 void HalDisplay::cleanupGrayscaleBuffers(const uint8_t* bwBuffer) {
-  if (bwBuffer) {
-    memcpy(lastDisplayedBuffer, bwBuffer, BUFFER_SIZE);
-  }
+  (void)bwBuffer;
   memset(grayscaleLsbBuffer, 0x00, BUFFER_SIZE);
   memset(grayscaleMsbBuffer, 0x00, BUFFER_SIZE);
 }
@@ -262,6 +339,7 @@ void HalDisplay::displayGrayBuffer(const bool turnOffScreen) {
   }
 
   flushBuffer(ditherBuffer, FAST_REFRESH, turnOffScreen);
+  memcpy(lastDisplayedBuffer, ditherBuffer, BUFFER_SIZE);
 }
 
 uint16_t HalDisplay::getDisplayWidth() const { return DISPLAY_WIDTH; }

@@ -45,13 +45,23 @@ class HalDisplay {
   uint16_t getDisplayHeight() const;
   uint16_t getDisplayWidthBytes() const;
   uint32_t getBufferSize() const;
+  bool supportsTextAntiAliasing() const { return false; }
 
  private:
+  struct DirtyRect {
+    uint16_t x = 0;
+    uint16_t y = 0;
+    uint16_t w = 0;
+    uint16_t h = 0;
+    bool hasChanges = false;
+  };
+
   using Panel = GxEPD2_BW<GxEPD2_310_GDEQ031T10, GxEPD2_310_GDEQ031T10::HEIGHT>;
 
   Panel epd;
   uint8_t* frameBuffer = nullptr;
   uint8_t* lastDisplayedBuffer = nullptr;
+  uint8_t* partialRefreshBuffer = nullptr;
   uint8_t* grayscaleLsbBuffer = nullptr;
   uint8_t* grayscaleMsbBuffer = nullptr;
   uint8_t* ditherBuffer = nullptr;
@@ -60,6 +70,8 @@ class HalDisplay {
 
   void ensureBuffers();
   void flushBuffer(const uint8_t* buffer, RefreshMode mode, bool turnOffScreen);
+  static void copyRectBuffer(const uint8_t* sourceBuffer, const DirtyRect& rect, uint8_t* targetBuffer);
+  static DirtyRect calculateDirtyRect(const uint8_t* previousBuffer, const uint8_t* currentBuffer);
   static bool getBufferBit(const uint8_t* buffer, uint16_t x, uint16_t y);
   static void setBufferPixel(uint8_t* buffer, uint16_t x, uint16_t y, bool black);
 };
