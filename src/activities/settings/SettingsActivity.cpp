@@ -205,9 +205,11 @@ void SettingsActivity::render(RenderLock&&) {
   const auto pageHeight = renderer.getScreenHeight();
 
   const auto& metrics = UITheme::getInstance().getMetrics();
+  const int versionLineHeight = renderer.getLineHeight(SMALL_FONT_ID);
+  const int versionReserved = versionLineHeight + metrics.verticalSpacing;
+  const int versionY = pageHeight - versionLineHeight - 2;
 
-  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_SETTINGS_TITLE),
-                 CROSSPOINT_VERSION);
+  GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, tr(STR_SETTINGS_TITLE));
 
   std::vector<TabInfo> tabs;
   tabs.reserve(categoryCount);
@@ -222,7 +224,7 @@ void SettingsActivity::render(RenderLock&&) {
       renderer,
       Rect{0, metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.verticalSpacing, pageWidth,
            pageHeight - (metrics.topPadding + metrics.headerHeight + metrics.tabBarHeight + metrics.buttonHintsHeight +
-                         metrics.verticalSpacing * 2)},
+                         metrics.verticalSpacing * 2 + versionReserved)},
       settingsCount, selectedSettingIndex - 1,
       [&settings](int index) { return std::string(I18N.get(settings[index].nameId)); }, nullptr, nullptr,
       [&settings](int i) {
@@ -240,6 +242,10 @@ void SettingsActivity::render(RenderLock&&) {
         return valueText;
       },
       true);
+
+  const auto versionText =
+      renderer.truncatedText(SMALL_FONT_ID, CROSSPOINT_VERSION, pageWidth - metrics.contentSidePadding * 2);
+  renderer.drawCenteredText(SMALL_FONT_ID, versionY, versionText.c_str());
 
   // Draw help text
   const auto confirmLabel = (selectedSettingIndex == 0)

@@ -219,8 +219,10 @@ void setupDisplayAndFonts() {
   renderer.insertFont(OPENDYSLEXIC_12_FONT_ID, opendyslexic12FontFamily);
   renderer.insertFont(OPENDYSLEXIC_14_FONT_ID, opendyslexic14FontFamily);
 #endif  // OMIT_FONTS
-  renderer.insertFont(UI_10_FONT_ID, ui10FontFamily);
-  renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
+  // T-Deck-Max is much denser than the original CrossPoint target, so scale
+  // UI typography down by one step to keep titles, menus and settings visible.
+  renderer.insertFont(UI_10_FONT_ID, smallFontFamily);
+  renderer.insertFont(UI_12_FONT_ID, ui10FontFamily);
   renderer.insertFont(SMALL_FONT_ID, smallFontFamily);
   LOG_DBG("MAIN", "Fonts setup");
 }

@@ -13,6 +13,11 @@
 #include "I18n.h"
 #include "RecentBooksStore.h"
 #include "components/UITheme.h"
+#include "components/icons/book24.h"
+#include "components/icons/file24.h"
+#include "components/icons/folder24.h"
+#include "components/icons/image24.h"
+#include "components/icons/text24.h"
 #include "fontIds.h"
 
 // Internal constants
@@ -206,7 +211,7 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
                          const std::function<std::string(int index)>& rowValue, bool highlightValue) const {
   int rowHeight =
       (rowSubtitle != nullptr) ? BaseMetrics::values.listWithSubtitleRowHeight : BaseMetrics::values.listRowHeight;
-  int pageItems = rect.height / rowHeight;
+  int pageItems = std::max(1, rect.height / rowHeight);
 
   const int totalPages = (itemCount + pageItems - 1) / pageItems;
   if (totalPages > 1) {
@@ -243,28 +248,72 @@ void BaseTheme::drawList(const GfxRenderer& renderer, Rect rect, int itemCount, 
   const auto pageStartIndex = selectedIndex / pageItems * pageItems;
   for (int i = pageStartIndex; i < itemCount && i < pageStartIndex + pageItems; i++) {
     const int itemY = rect.y + (i % pageItems) * rowHeight;
-    int textWidth = contentWidth - BaseMetrics::values.contentSidePadding * 2 - (rowValue != nullptr ? 60 : 0);
+    const int titleFont = (rowSubtitle != nullptr) ? UI_10_FONT_ID : SMALL_FONT_ID;
+    const int subtitleFont = SMALL_FONT_ID;
+    const int valueFont = SMALL_FONT_ID;
+    const int iconSize = (rowIcon != nullptr) ? 24 : 0;
+    const int titleLineHeight = renderer.getLineHeight(titleFont);
+    const int subtitleLineHeight = (rowSubtitle != nullptr) ? renderer.getLineHeight(subtitleFont) : 0;
+    const int valueLineHeight = renderer.getLineHeight(valueFont);
+    const int textGap = (rowSubtitle != nullptr) ? 2 : 0;
+    const int textBlockHeight = titleLineHeight + (rowSubtitle != nullptr ? subtitleLineHeight + textGap : 0);
+    const int textTop = itemY + std::max(0, (rowHeight - textBlockHeight) / 2);
+    const int titleY = textTop;
+    const int subtitleY = textTop + titleLineHeight + textGap;
+    const int valueY = itemY + std::max(0, (rowHeight - valueLineHeight) / 2);
+    const int iconX = rect.x + BaseMetrics::values.contentSidePadding;
+    const int iconGap = (rowIcon != nullptr) ? 6 : 0;
+    const int textX = iconX + (rowIcon != nullptr ? iconSize + iconGap : 0);
+    int textWidth = contentWidth - (textX - rect.x) - BaseMetrics::values.contentSidePadding;
+    std::string valueText = "";
+
+    if (rowValue != nullptr) {
+      valueText = rowValue(i);
+      valueText = renderer.truncatedText(valueFont, valueText.c_str(), std::min(80, textWidth / 2));
+      const int valueWidth = renderer.getTextWidth(valueFont, valueText.c_str()) + 6;
+      textWidth -= valueWidth;
+      renderer.drawText(valueFont, rect.x + contentWidth - BaseMetrics::values.contentSidePadding - valueWidth, valueY,
+                        valueText.c_str(), i != selectedIndex);
+    }
+
+    if (rowIcon != nullptr) {
+      const auto icon = rowIcon(i);
+      const uint8_t* iconBitmap = nullptr;
+      switch (icon) {
+        case UIIcon::Folder:
+          iconBitmap = Folder24Icon;
+          break;
+        case UIIcon::Text:
+          iconBitmap = Text24Icon;
+          break;
+        case UIIcon::Image:
+          iconBitmap = Image24Icon;
+          break;
+        case UIIcon::Book:
+          iconBitmap = Book24Icon;
+          break;
+        case UIIcon::File:
+          iconBitmap = File24Icon;
+          break;
+        default:
+          iconBitmap = nullptr;
+          break;
+      }
+      if (iconBitmap != nullptr) {
+        renderer.drawIcon(iconBitmap, iconX, itemY + std::max(0, (rowHeight - iconSize) / 2), iconSize, iconSize);
+      }
+    }
 
     // Draw name
     auto itemName = rowTitle(i);
-    auto font = (rowSubtitle != nullptr) ? UI_12_FONT_ID : UI_10_FONT_ID;
-    auto item = renderer.truncatedText(font, itemName.c_str(), textWidth);
-    renderer.drawText(font, rect.x + BaseMetrics::values.contentSidePadding, itemY, item.c_str(), i != selectedIndex);
+    auto item = renderer.truncatedText(titleFont, itemName.c_str(), textWidth);
+    renderer.drawText(titleFont, textX, titleY, item.c_str(), i != selectedIndex);
 
     if (rowSubtitle != nullptr) {
       // Draw subtitle
       std::string subtitleText = rowSubtitle(i);
-      auto subtitle = renderer.truncatedText(UI_10_FONT_ID, subtitleText.c_str(), textWidth);
-      renderer.drawText(UI_10_FONT_ID, rect.x + BaseMetrics::values.contentSidePadding, itemY + 30, subtitle.c_str(),
-                        i != selectedIndex);
-    }
-
-    if (rowValue != nullptr) {
-      // Draw value
-      std::string valueText = rowValue(i);
-      const auto valueTextWidth = renderer.getTextWidth(UI_10_FONT_ID, valueText.c_str());
-      renderer.drawText(UI_10_FONT_ID, rect.x + contentWidth - BaseMetrics::values.contentSidePadding - valueTextWidth,
-                        itemY, valueText.c_str(), i != selectedIndex);
+      auto subtitle = renderer.truncatedText(subtitleFont, subtitleText.c_str(), textWidth);
+      renderer.drawText(subtitleFont, textX, subtitleY, subtitle.c_str(), i != selectedIndex);
     }
   }
 }
@@ -288,7 +337,8 @@ void BaseTheme::drawHeader(const GfxRenderer& renderer, Rect rect, const char* t
     auto truncatedTitle = renderer.truncatedText(UI_12_FONT_ID, title,
                                                  rect.width - padding * 2 - BaseMetrics::values.contentSidePadding * 2,
                                                  EpdFontFamily::BOLD);
-    renderer.drawCenteredText(UI_12_FONT_ID, rect.y + 5, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
+    const int titleY = rect.y + std::max(0, (rect.height - renderer.getLineHeight(UI_12_FONT_ID)) / 2) - 1;
+    renderer.drawCenteredText(UI_12_FONT_ID, titleY, truncatedTitle.c_str(), true, EpdFontFamily::BOLD);
   }
 
   if (subtitle) {
@@ -309,18 +359,20 @@ void BaseTheme::drawSubHeader(const GfxRenderer& renderer, Rect rect, const char
 
   int currentX = rect.x + BaseMetrics::values.contentSidePadding;
   int rightSpace = BaseMetrics::values.contentSidePadding;
+  const int smallTextY = rect.y + std::max(0, (rect.height - renderer.getLineHeight(SMALL_FONT_ID)) / 2);
+  const int textY = rect.y + std::max(0, (rect.height - renderer.getLineHeight(UI_12_FONT_ID)) / 2);
   if (rightLabel) {
     auto truncatedRightLabel =
         renderer.truncatedText(SMALL_FONT_ID, rightLabel, maxListValueWidth, EpdFontFamily::REGULAR);
     int rightLabelWidth = renderer.getTextWidth(SMALL_FONT_ID, truncatedRightLabel.c_str());
     renderer.drawText(SMALL_FONT_ID, rect.x + rect.width - BaseMetrics::values.contentSidePadding - rightLabelWidth,
-                      rect.y + 7, truncatedRightLabel.c_str());
+                      smallTextY, truncatedRightLabel.c_str());
     rightSpace += rightLabelWidth + 10;
   }
 
   auto truncatedLabel = renderer.truncatedText(
       UI_12_FONT_ID, label, rect.width - BaseMetrics::values.contentSidePadding - rightSpace, EpdFontFamily::REGULAR);
-  renderer.drawText(UI_12_FONT_ID, currentX, rect.y, truncatedLabel.c_str(), true, EpdFontFamily::REGULAR);
+  renderer.drawText(UI_12_FONT_ID, currentX, textY, truncatedLabel.c_str(), true, EpdFontFamily::REGULAR);
 }
 
 void BaseTheme::drawTabBar(const GfxRenderer& renderer, const Rect rect, const std::vector<TabInfo>& tabs,
@@ -331,6 +383,7 @@ void BaseTheme::drawTabBar(const GfxRenderer& renderer, const Rect rect, const s
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
 
   int currentX = rect.x + BaseMetrics::values.contentSidePadding;
+  const int textY = rect.y + std::max(0, (rect.height - lineHeight) / 2);
 
   for (const auto& tab : tabs) {
     const int textWidth =
@@ -346,7 +399,7 @@ void BaseTheme::drawTabBar(const GfxRenderer& renderer, const Rect rect, const s
     }
 
     // Draw tab label
-    renderer.drawText(UI_12_FONT_ID, currentX, rect.y, tab.label, !(tab.selected && selected),
+    renderer.drawText(UI_12_FONT_ID, currentX, textY, tab.label, !(tab.selected && selected),
                       tab.selected ? EpdFontFamily::BOLD : EpdFontFamily::REGULAR);
 
     currentX += textWidth + BaseMetrics::values.tabSpacing;
