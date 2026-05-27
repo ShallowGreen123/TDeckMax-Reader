@@ -64,7 +64,7 @@ int UITheme::getNumberOfItemsPerPage(const GfxRenderer& renderer, bool hasHeader
   if (hasTabBar) {
     reservedHeight += metrics.tabBarHeight;
   }
-  if (hasButtonHints) {
+  if (hasButtonHints && showsBottomButtonHints() && metrics.buttonHintsHeight > 0) {
     reservedHeight += metrics.verticalSpacing + metrics.buttonHintsHeight;
   }
   const int availableHeight = renderer.getScreenHeight() - reservedHeight - extraReservedHeight;
@@ -115,3 +115,5 @@ int UITheme::getProgressBarHeight() {
       SETTINGS.statusBarProgressBar != CrossPointSettings::STATUS_BAR_PROGRESS_BAR::HIDE_PROGRESS;
   return (showProgressBar ? (((SETTINGS.statusBarProgressBarThickness + 1) * 2) + metrics.progressBarMarginTop) : 0);
 }
+
+bool UITheme::showsBottomButtonHints() { return false; }

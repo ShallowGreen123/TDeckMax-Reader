@@ -188,6 +188,8 @@ void HalDisplay::refreshDisplay(const RefreshMode mode, const bool turnOffScreen
   memcpy(lastDisplayedBuffer, frameBuffer, BUFFER_SIZE);
 }
 
+void HalDisplay::requestFullRefreshNext() { requireFullRefresh = true; }
+
 void HalDisplay::deepSleep() {
   requireFullRefresh = true;
   epd.hibernate();

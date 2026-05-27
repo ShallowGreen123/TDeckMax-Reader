@@ -35,6 +35,7 @@ class GfxRenderer {
   RenderMode renderMode;
   Orientation orientation;
   bool fadingFix;
+  HalDisplay::RefreshMode defaultRefreshMode = HalDisplay::FULL_REFRESH;
   uint8_t* frameBuffer = nullptr;
   uint16_t panelWidth = HalDisplay::DISPLAY_WIDTH;
   uint16_t panelHeight = HalDisplay::DISPLAY_HEIGHT;
@@ -83,12 +84,16 @@ class GfxRenderer {
   // Screen ops
   int getScreenWidth() const;
   int getScreenHeight() const;
-  void displayBuffer(HalDisplay::RefreshMode refreshMode = HalDisplay::FAST_REFRESH) const;
+  void displayBuffer() const;
+  void displayBuffer(HalDisplay::RefreshMode refreshMode) const;
   // EXPERIMENTAL: Windowed update - display only a rectangular region
   // void displayWindow(int x, int y, int width, int height) const;
   void invertScreen() const;
   void clearScreen(uint8_t color = 0xFF) const;
   void getOrientedViewableTRBL(int* outTop, int* outRight, int* outBottom, int* outLeft) const;
+  void setDefaultRefreshMode(HalDisplay::RefreshMode refreshMode) { defaultRefreshMode = refreshMode; }
+  HalDisplay::RefreshMode getDefaultRefreshMode() const { return defaultRefreshMode; }
+  void forceFullRefreshNext() const { display.requestFullRefreshNext(); }
 
   // Drawing
   void drawPixel(int x, int y, bool state = true) const;

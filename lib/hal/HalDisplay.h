@@ -30,6 +30,7 @@ class HalDisplay {
 
   void displayBuffer(RefreshMode mode = RefreshMode::FAST_REFRESH, bool turnOffScreen = false);
   void refreshDisplay(RefreshMode mode = RefreshMode::FAST_REFRESH, bool turnOffScreen = false);
+  void requestFullRefreshNext();
 
   void deepSleep();
   uint8_t* getFrameBuffer() const;

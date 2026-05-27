@@ -65,4 +65,5 @@ class EpubReaderActivity final : public Activity {
   void loop() override;
   void render(RenderLock&& lock) override;
   bool isReaderActivity() const override { return true; }
+  HalDisplay::RefreshMode defaultRefreshMode() const override { return HalDisplay::FAST_REFRESH; }
 };

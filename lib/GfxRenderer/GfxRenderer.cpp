@@ -926,6 +926,12 @@ void GfxRenderer::invertScreen() const {
   }
 }
 
+void GfxRenderer::displayBuffer() const {
+  auto elapsed = millis() - start_ms;
+  LOG_DBG("GFX", "Time = %lu ms from clearScreen to displayBuffer", elapsed);
+  display.displayBuffer(defaultRefreshMode, fadingFix);
+}
+
 void GfxRenderer::displayBuffer(const HalDisplay::RefreshMode refreshMode) const {
   auto elapsed = millis() - start_ms;
   LOG_DBG("GFX", "Time = %lu ms from clearScreen to displayBuffer", elapsed);

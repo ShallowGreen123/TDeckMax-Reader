@@ -361,6 +361,10 @@ void RoundedRaffTheme::drawList(const GfxRenderer& renderer, Rect rect, int item
 
 void RoundedRaffTheme::drawButtonHints(GfxRenderer& renderer, const char* btn1, const char* btn2, const char* btn3,
                                        const char* btn4) const {
+  if (!UITheme::showsBottomButtonHints() || RoundedRaffMetrics::values.buttonHintsHeight <= 0) {
+    return;
+  }
+
   const GfxRenderer::Orientation origOrientation = renderer.getOrientation();
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 

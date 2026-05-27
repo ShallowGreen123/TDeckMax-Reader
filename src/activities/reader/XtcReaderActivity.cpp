@@ -63,6 +63,7 @@ void XtcReaderActivity::loop() {
           [this](const ActivityResult& result) {
             if (!result.isCancelled) {
               currentPage = std::get<PageResult>(result.data).page;
+              pagesUntilFullRefresh = 1;
             }
           });
     }
@@ -138,7 +139,7 @@ void XtcReaderActivity::render(RenderLock&&) {
     // Show end of book screen
     renderer.clearScreen();
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_END_OF_BOOK), true, EpdFontFamily::BOLD);
-    renderer.displayBuffer();
+    renderer.displayBuffer(HalDisplay::FULL_REFRESH);
     return;
   }
 
@@ -167,7 +168,7 @@ void XtcReaderActivity::renderPage() {
     LOG_ERR("XTR", "Failed to allocate page buffer (%lu bytes)", pageBufferSize);
     renderer.clearScreen();
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_MEMORY_ERROR), true, EpdFontFamily::BOLD);
-    renderer.displayBuffer();
+    renderer.displayBuffer(HalDisplay::FULL_REFRESH);
     return;
   }
 
@@ -178,7 +179,7 @@ void XtcReaderActivity::renderPage() {
     free(pageBuffer);
     renderer.clearScreen();
     renderer.drawCenteredText(UI_12_FONT_ID, 300, tr(STR_PAGE_LOAD_ERROR), true, EpdFontFamily::BOLD);
-    renderer.displayBuffer();
+    renderer.displayBuffer(HalDisplay::FULL_REFRESH);
     return;
   }
 
@@ -237,7 +238,7 @@ void XtcReaderActivity::renderPage() {
 
     // Display BW with conditional refresh based on pagesUntilFullRefresh
     if (pagesUntilFullRefresh <= 1) {
-      renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+      renderer.displayBuffer(HalDisplay::FULL_REFRESH);
       pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
     } else {
       renderer.displayBuffer();
@@ -316,7 +317,7 @@ void XtcReaderActivity::renderPage() {
 
   // Display with appropriate refresh
   if (pagesUntilFullRefresh <= 1) {
-    renderer.displayBuffer(HalDisplay::HALF_REFRESH);
+    renderer.displayBuffer(HalDisplay::FULL_REFRESH);
     pagesUntilFullRefresh = SETTINGS.getRefreshFrequency();
   } else {
     renderer.displayBuffer();

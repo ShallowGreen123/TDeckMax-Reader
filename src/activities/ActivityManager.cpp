@@ -89,6 +89,8 @@ void ActivityManager::loop() {
       } else {
         currentActivity = std::move(stackActivities.back());
         stackActivities.pop_back();
+        renderer.setDefaultRefreshMode(currentActivity->defaultRefreshMode());
+        renderer.forceFullRefreshNext();
         LOG_DBG("ACT", "Popped from activity stack, new size = %zu", stackActivities.size());
         // Handle result if necessary
         if (currentActivity->resultHandler) {
@@ -129,6 +131,8 @@ void ActivityManager::loop() {
       }
       pendingAction = PendingAction::None;
       currentActivity = std::move(pendingActivity);
+      renderer.setDefaultRefreshMode(currentActivity->defaultRefreshMode());
+      renderer.forceFullRefreshNext();
 
       lock.unlock();  // onEnter may acquire its own lock
       currentActivity->onEnter();
@@ -166,6 +170,8 @@ void ActivityManager::replaceActivity(std::unique_ptr<Activity>&& newActivity) {
   } else {
     // No current activity, safe to launch immediately
     currentActivity = std::move(newActivity);
+    renderer.setDefaultRefreshMode(currentActivity->defaultRefreshMode());
+    renderer.forceFullRefreshNext();
     currentActivity->onEnter();
   }
 }
