@@ -1,5 +1,7 @@
 #include "EpubReaderMenuActivity.h"
 
+#include <algorithm>
+
 #include <GfxRenderer.h>
 #include <I18n.h>
 
@@ -87,6 +89,7 @@ void EpubReaderMenuActivity::loop() {
 void EpubReaderMenuActivity::render(RenderLock&&) {
   renderer.clearScreen();
   const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
   const auto orientation = renderer.getOrientation();
   // Landscape orientation: button hints are drawn along a vertical edge, so we
   // reserve a horizontal gutter to prevent overlap with menu content.
@@ -101,6 +104,122 @@ void EpubReaderMenuActivity::render(RenderLock&&) {
   const int contentWidth = pageWidth - hintGutterWidth;
   const int hintGutterHeight = isPortraitInverted ? 50 : 0;
   const int contentY = hintGutterHeight;
+  const bool useLyraCompactLayout = SETTINGS.uiTheme == CrossPointSettings::UI_THEME::LYRA;
+
+  if (useLyraCompactLayout) {
+    constexpr int kHeaderSidePadding = 12;
+    constexpr int kHeaderTopPadding = 12;
+    constexpr int kHeaderBottomGap = 8;
+    constexpr int kMenuRowHeight = 24;
+    constexpr int kMenuRowGap = 3;
+    constexpr int kMenuRowRadius = 6;
+    constexpr int kMenuTextPadding = 10;
+    constexpr int kMenuBottomPadding = 8;
+    constexpr int kMenuValueGap = 10;
+    constexpr int kScrollBarWidth = 3;
+    constexpr int kScrollBarGap = 4;
+    constexpr int kDividerThickness = 2;
+    constexpr int kHeaderValueGap = 3;
+
+    auto titleLines = renderer.wrappedText(UI_10_FONT_ID, title.c_str(),
+                                           std::max(40, contentWidth - kHeaderSidePadding * 2), 2,
+                                           EpdFontFamily::BOLD);
+    if (titleLines.empty()) {
+      titleLines.push_back("");
+    }
+
+    std::string progressLine;
+    if (totalPages > 0) {
+      progressLine = std::string(tr(STR_CHAPTER_PREFIX)) + std::to_string(currentPage) + "/" +
+                     std::to_string(totalPages) + std::string(tr(STR_PAGES_SEPARATOR));
+    }
+    progressLine += std::string(tr(STR_BOOK_PREFIX)) + std::to_string(bookProgressPercent) + "%";
+
+    const int titleLineHeight = renderer.getLineHeight(UI_10_FONT_ID);
+    const int metaLineHeight = renderer.getLineHeight(SMALL_FONT_ID);
+    int headerY = contentY + kHeaderTopPadding;
+    for (const auto& line : titleLines) {
+      const int lineWidth = renderer.getTextWidth(UI_10_FONT_ID, line.c_str(), EpdFontFamily::BOLD);
+      const int lineX = contentX + std::max(0, (contentWidth - lineWidth) / 2);
+      renderer.drawText(UI_10_FONT_ID, lineX, headerY, line.c_str(), true, EpdFontFamily::BOLD);
+      headerY += titleLineHeight;
+    }
+
+    const int progressY = headerY + kHeaderValueGap;
+    const int progressWidth = renderer.getTextWidth(SMALL_FONT_ID, progressLine.c_str());
+    const int progressX = contentX + std::max(0, (contentWidth - progressWidth) / 2);
+    renderer.drawText(SMALL_FONT_ID, progressX, progressY, progressLine.c_str(), true);
+
+    const int dividerY = progressY + metaLineHeight + kHeaderBottomGap;
+    renderer.drawLine(contentX + kHeaderSidePadding, dividerY, contentX + contentWidth - kHeaderSidePadding, dividerY,
+                      kDividerThickness, true);
+
+    const int listTop = dividerY + 8;
+    const int listBottom = pageHeight - kMenuBottomPadding;
+    const int scrollAreaWidth = (static_cast<int>(menuItems.size()) > 0) ? (kScrollBarWidth + kScrollBarGap) : 0;
+    const int listContentWidth = std::max(0, contentWidth - kHeaderSidePadding * 2 - scrollAreaWidth);
+    const int pageItems =
+        std::max(1, (listBottom - listTop + kMenuRowGap) / std::max(1, kMenuRowHeight + kMenuRowGap));
+    const int pageStartIndex = selectedIndex / pageItems * pageItems;
+    const int pageEndIndex = std::min(static_cast<int>(menuItems.size()), pageStartIndex + pageItems);
+    const int totalPagesForMenu = (static_cast<int>(menuItems.size()) + pageItems - 1) / pageItems;
+
+    if (totalPagesForMenu > 1) {
+      const int visibleHeight =
+          (pageEndIndex - pageStartIndex) * kMenuRowHeight + std::max(0, pageEndIndex - pageStartIndex - 1) * kMenuRowGap;
+      const int scrollTrackX = contentX + contentWidth - kHeaderSidePadding - kScrollBarWidth;
+      const int scrollTrackY = listTop;
+      const int scrollTrackHeight = std::max(1, visibleHeight);
+      const int thumbHeight = std::max(kMenuRowHeight, (scrollTrackHeight * pageItems) / static_cast<int>(menuItems.size()));
+      const int currentPage = selectedIndex / pageItems;
+      const int maxThumbTravel = std::max(0, scrollTrackHeight - thumbHeight);
+      const int thumbY = scrollTrackY +
+                         ((totalPagesForMenu > 1) ? (maxThumbTravel * currentPage) / (totalPagesForMenu - 1) : 0);
+
+      renderer.drawLine(scrollTrackX, scrollTrackY, scrollTrackX, scrollTrackY + scrollTrackHeight, true);
+      renderer.fillRect(scrollTrackX - kScrollBarWidth + 1, thumbY, kScrollBarWidth, thumbHeight, true);
+    }
+
+    for (int i = pageStartIndex; i < pageEndIndex; ++i) {
+      const int visualIndex = i - pageStartIndex;
+      const int rowY = listTop + visualIndex * (kMenuRowHeight + kMenuRowGap);
+      const bool isSelected = i == selectedIndex;
+      const int rowX = contentX + kHeaderSidePadding;
+
+      if (isSelected) {
+        renderer.fillRoundedRect(rowX, rowY, listContentWidth, kMenuRowHeight, kMenuRowRadius, Color::LightGray);
+      }
+
+      std::string valueText;
+      if (menuItems[i].action == MenuAction::ROTATE_SCREEN) {
+        valueText = I18N.get(orientationLabels[pendingOrientation]);
+      } else if (menuItems[i].action == MenuAction::AUTO_PAGE_TURN) {
+        valueText = pageTurnLabels[selectedPageTurnOption];
+      }
+
+      const int valueWidth =
+          valueText.empty() ? 0 : renderer.getTextWidth(SMALL_FONT_ID, valueText.c_str(), EpdFontFamily::REGULAR);
+      const int labelMaxWidth =
+          std::max(20, listContentWidth - kMenuTextPadding * 2 - (valueText.empty() ? 0 : valueWidth + kMenuValueGap));
+      auto label = renderer.truncatedText(UI_10_FONT_ID, I18N.get(menuItems[i].labelId), labelMaxWidth,
+                                          EpdFontFamily::REGULAR);
+      const int labelY = rowY + std::max(0, (kMenuRowHeight - renderer.getLineHeight(UI_10_FONT_ID)) / 2);
+
+      renderer.drawText(UI_10_FONT_ID, rowX + kMenuTextPadding, labelY, label.c_str(), true, EpdFontFamily::REGULAR);
+
+      if (!valueText.empty()) {
+        const int valueY = rowY + std::max(0, (kMenuRowHeight - metaLineHeight) / 2);
+        const int valueX = rowX + listContentWidth - kMenuTextPadding - valueWidth;
+        renderer.drawText(SMALL_FONT_ID, valueX, valueY, valueText.c_str(), true);
+      }
+    }
+
+    const auto labels = mappedInput.mapLabels(tr(STR_BACK), tr(STR_SELECT), tr(STR_DIR_UP), tr(STR_DIR_DOWN));
+    GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
+
+    renderer.displayBuffer();
+    return;
+  }
 
   // Title
   const std::string truncTitle =
