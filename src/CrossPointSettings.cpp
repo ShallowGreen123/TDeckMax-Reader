@@ -297,7 +297,9 @@ int CrossPointSettings::getReaderFontId() const {
     default:
       switch (fontSize) {
         case SMALL:
-          return NOTOSERIF_12_FONT_ID;
+          // T-Deck-Max has a much denser 240x320 screen than the original
+          // target, so the smallest reader step uses the compact 8px body font.
+          return SMALL_FONT_ID;
         case MEDIUM:
         default:
           return NOTOSERIF_14_FONT_ID;
@@ -309,7 +311,7 @@ int CrossPointSettings::getReaderFontId() const {
     case NOTOSANS:
       switch (fontSize) {
         case SMALL:
-          return NOTOSANS_12_FONT_ID;
+          return SMALL_FONT_ID;
         case MEDIUM:
         default:
           return NOTOSANS_14_FONT_ID;
