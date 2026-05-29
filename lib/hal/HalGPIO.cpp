@@ -6,6 +6,7 @@
 #include <Logging.h>
 #include <SPI.h>
 #include <XPowersLib.h>
+#include <bq27220.h>
 #include <Wire.h>
 #include <esp_sleep.h>
 
@@ -487,6 +488,25 @@ bool HalGPIO::readChargerStatus(HalChargerStatusSnapshot& snapshot) const {
   snapshot.targetCurrentMa = charger.getChargerConstantCurr();
   snapshot.prechargeCurrentMa = charger.getPrechargeCurr();
   snapshot.faultStatusRaw = charger.getFaultStatus();
+  return true;
+}
+
+bool HalGPIO::initFuelGaugeModel() {
+  BQ27220 fuelGauge;
+  fuelGauge.setDefaultCapacity(BQ27220_BATTERY_MODEL_CAPACITY_MAH);
+
+  if (!fuelGauge.init()) {
+    LOG_ERR("GPIO", "BQ27220 model init failed for %u mAh", BQ27220_BATTERY_MODEL_CAPACITY_MAH);
+    return false;
+  }
+
+  const uint16_t designCapacityMah = fuelGauge.getDesignCapacity();
+  const uint16_t fullChargeCapacityMah = fuelGauge.getFullChargeCapacity();
+  LOG_INF("GPIO",
+          "BQ27220 model ready: target=%u mAh, design=%u mAh, full=%u mAh",
+          BQ27220_BATTERY_MODEL_CAPACITY_MAH,
+          designCapacityMah,
+          fullChargeCapacityMah);
   return true;
 }
 

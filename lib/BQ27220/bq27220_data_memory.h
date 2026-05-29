@@ -7,6 +7,8 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
+#define BQ27220_BATTERY_MODEL_CAPACITY_MAH 1500u
+
 typedef enum
 {
     BQ27220DMTypeEnd,

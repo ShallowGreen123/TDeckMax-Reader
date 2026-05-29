@@ -245,6 +245,7 @@ void setup() {
 #endif
 
   LOG_INF("MAIN", "Hardware detect: T-Deck-Max");
+  gpio.initFuelGaugeModel();
 
   // SD Card Initialization
   // We need 6 open files concurrently when parsing a new chapter

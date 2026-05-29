@@ -27,6 +27,7 @@ struct HalGaugeStatusSnapshot {
   uint16_t temperatureDk = 0;
   uint16_t remainingCapacityMah = 0;
   uint16_t fullCapacityMah = 0;
+  uint16_t designCapacityMah = 0;
   uint16_t chargeVoltageMv = 0;
   uint16_t batteryStatusRaw = 0;
   uint16_t gaugingStatusRaw = 0;

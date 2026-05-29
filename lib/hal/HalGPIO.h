@@ -47,6 +47,7 @@ class HalGPIO {
   bool isUsbConnected() const;
   bool wasUsbStateChanged() const;
   bool readChargerStatus(HalChargerStatusSnapshot& snapshot) const;
+  bool initFuelGaugeModel();
 
   enum class WakeupReason { PowerButton, AfterFlash, AfterUSBPower, Other };
   WakeupReason getWakeupReason() const;

@@ -19,6 +19,7 @@ constexpr uint8_t BQ27220_AVERAGE_CURRENT_REG = 0x14;
 constexpr uint8_t BQ27220_SOC_REG = 0x2C;
 constexpr uint8_t BQ27220_SOH_REG = 0x2E;
 constexpr uint8_t BQ27220_CHARGE_VOLTAGE_REG = 0x30;
+constexpr uint8_t BQ27220_DESIGN_CAPACITY_REG = 0x3C;
 constexpr uint8_t BQ27220_MAC_DATA_REG = 0x40;
 
 constexpr uint16_t BQ27220_DEVICE_ID = 0x0220;
@@ -91,6 +92,7 @@ bool readGaugeSnapshot(HalGaugeStatusSnapshot& gauge, const HalChargerStatusSnap
   uint16_t temperature = 0;
   uint16_t remainingCapacity = 0;
   uint16_t fullCapacity = 0;
+  uint16_t designCapacity = 0;
   uint16_t chargeVoltage = 0;
   uint16_t currentRaw = 0;
   uint16_t averageCurrentRaw = 0;
@@ -104,6 +106,7 @@ bool readGaugeSnapshot(HalGaugeStatusSnapshot& gauge, const HalChargerStatusSnap
       readBq27220Reg16(BQ27220_AVERAGE_CURRENT_REG, averageCurrentRaw) &&
       readBq27220Reg16(BQ27220_REMAINING_CAPACITY_REG, remainingCapacity) &&
       readBq27220Reg16(BQ27220_FULL_CHARGE_CAPACITY_REG, fullCapacity) &&
+      readBq27220Reg16(BQ27220_DESIGN_CAPACITY_REG, designCapacity) &&
       readBq27220Reg16(BQ27220_CHARGE_VOLTAGE_REG, chargeVoltage);
 
   if (!readOk) {
@@ -119,6 +122,7 @@ bool readGaugeSnapshot(HalGaugeStatusSnapshot& gauge, const HalChargerStatusSnap
   gauge.temperatureDk = temperature;
   gauge.remainingCapacityMah = remainingCapacity;
   gauge.fullCapacityMah = fullCapacity;
+  gauge.designCapacityMah = designCapacity;
   gauge.chargeVoltageMv = chargeVoltage;
   gauge.currentMa = static_cast<int16_t>(currentRaw);
   gauge.averageCurrentMa = static_cast<int16_t>(averageCurrentRaw);

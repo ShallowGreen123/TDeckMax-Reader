@@ -36,12 +36,12 @@ BQ27220DMData gauge_data_memory[] = {
     {
         .address = BQ27220DMAddressGasGaugingCEDVProfile1FullChargeCapacity,
         .type = BQ27220DMTypeU16,
-        .value.u16 = 1500,
+        .value.u16 = BQ27220_BATTERY_MODEL_CAPACITY_MAH,
     },
     {
         .address = BQ27220DMAddressGasGaugingCEDVProfile1DesignCapacity,
         .type = BQ27220DMTypeU16,
-        .value.u16 = 1500,
+        .value.u16 = BQ27220_BATTERY_MODEL_CAPACITY_MAH,
     },
     {
         .address = BQ27220DMAddressGasGaugingCEDVProfile1EMF,

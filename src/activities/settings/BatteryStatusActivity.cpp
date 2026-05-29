@@ -171,6 +171,7 @@ std::vector<std::string> gaugeLines(const HalBatteryStatusSnapshot& snapshot) {
             lineText("Temp", "--"),
             lineText("Remain", "--"),
             lineText("Full", "--"),
+            lineText("Design", "--"),
             lineText("Status B", "--"),
             lineText("Status G", "--")};
   }
@@ -185,6 +186,7 @@ std::vector<std::string> gaugeLines(const HalBatteryStatusSnapshot& snapshot) {
             lineText("Temp", "--"),
             lineText("Remain", "--"),
             lineText("Full", "--"),
+            lineText("Design", "--"),
             lineText("Status B", "--"),
             lineText("Status G", "--")};
   }
@@ -203,6 +205,7 @@ std::vector<std::string> gaugeLines(const HalBatteryStatusSnapshot& snapshot) {
           lineText("Temp", formatTemperature(gauge.temperatureDk)),
           lineText("Remain", gauge.remainingCapacityMah, "mAh"),
           lineText("Full", gauge.fullCapacityMah, "mAh"),
+          lineText("Design", gauge.designCapacityMah, "mAh"),
           lineText("Status B", batteryStatus),
           lineText("Status G", gaugingStatus)};
 }
