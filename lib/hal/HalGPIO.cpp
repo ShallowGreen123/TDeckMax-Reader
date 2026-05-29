@@ -310,6 +310,40 @@ void HalGPIO::update() {
   anyPressed = false;
   anyReleased = false;
   lastPressedBindableKey = -1;
+  const unsigned long now = millis();
+
+  auto applyRawKeyState = [this, &nextRawState, now](const uint8_t rawKey, const bool pressed) {
+    if (rawKey >= RAW_BINDABLE_KEY_COUNT || nextRawState[rawKey] == pressed) {
+      return;
+    }
+
+    nextRawState[rawKey] = pressed;
+    if (pressed) {
+      rawKeyPressedEdge[rawKey] = true;
+      rawKeyPressedSince[rawKey] = now;
+      anyPressed = true;
+      lastPressedBindableKey = rawKey;
+    } else {
+      rawKeyReleasedEdge[rawKey] = true;
+      anyReleased = true;
+    }
+  };
+
+  auto applyButtonState = [this, &nextState, now](const uint8_t button, const bool pressed) {
+    if (button >= BUTTON_COUNT || nextState[button] == pressed) {
+      return;
+    }
+
+    nextState[button] = pressed;
+    if (pressed) {
+      buttonPressedEdge[button] = true;
+      buttonPressedSince[button] = now;
+      anyPressed = true;
+    } else {
+      buttonReleasedEdge[button] = true;
+      anyReleased = true;
+    }
+  };
 
   if (keypadReady) {
     while (keypad.available() > 0) {
@@ -319,43 +353,24 @@ void HalGPIO::update() {
       if (!decodeKeypadEvent(keypad.getEvent(), rawKey, button, pressed)) {
         continue;
       }
-      nextRawState[rawKey] = pressed;
-      nextState[button] = pressed;
+      // Apply each queued keypad event immediately so a quick tap that
+      // completes between two update() calls still preserves its edges.
+      applyRawKeyState(rawKey, pressed);
+      applyButtonState(button, pressed);
     }
   }
 
-  nextState[BTN_POWER] = digitalRead(BOARD_BOOT_PIN) == LOW;
-  nextRawState[RAW_KEY_BOOT] = nextState[BTN_POWER];
+  const bool powerPressed = digitalRead(BOARD_BOOT_PIN) == LOW;
+  applyButtonState(BTN_POWER, powerPressed);
+  applyRawKeyState(RAW_KEY_BOOT, powerPressed);
 
-  const unsigned long now = millis();
   heldTime = 0;
   for (uint8_t i = 0; i < RAW_BINDABLE_KEY_COUNT; i++) {
-    if (nextRawState[i] != rawKeyState[i]) {
-      if (nextRawState[i]) {
-        rawKeyPressedEdge[i] = true;
-        rawKeyPressedSince[i] = now;
-        anyPressed = true;
-        lastPressedBindableKey = i;
-      } else {
-        rawKeyReleasedEdge[i] = true;
-        anyReleased = true;
-      }
-      rawKeyState[i] = nextRawState[i];
-    }
+    rawKeyState[i] = nextRawState[i];
   }
 
   for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
-    if (nextState[i] != buttonState[i]) {
-      if (nextState[i]) {
-        buttonPressedEdge[i] = true;
-        buttonPressedSince[i] = now;
-        anyPressed = true;
-      } else {
-        buttonReleasedEdge[i] = true;
-        anyReleased = true;
-      }
-      buttonState[i] = nextState[i];
-    }
+    buttonState[i] = nextState[i];
 
     if (buttonState[i]) {
       heldTime = std::max(heldTime, now - buttonPressedSince[i]);
