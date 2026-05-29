@@ -42,6 +42,7 @@ class HalGPIO {
   int getLastPressedBindableKey() const;
 
   void startDeepSleep();
+  bool shutdown();
   void verifyPowerButtonWakeup(uint16_t requiredDurationMs, bool shortPressAllowed);
 
   bool isUsbConnected() const;

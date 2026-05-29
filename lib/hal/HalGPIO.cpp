@@ -141,6 +141,19 @@ void resetKeyboardIfAvailable() {
   delay(TOUCH_RESET_SETTLE_MS);
 }
 
+void powerDownBoardPeripherals() {
+  analogWrite(BOARD_KEYBOARD_LED, 0);
+  analogWrite(BOARD_EPD_BL, 0);
+
+  if (xl9555Ready) {
+    xl9555.digitalWrite(BOARD_XL9555_06_AMPLIFIER, LOW);
+    xl9555.digitalWrite(BOARD_XL9555_05_MOTOR_EN, LOW);
+    xl9555.digitalWrite(BOARD_XL9555_01_LORA_EN, LOW);
+    xl9555.digitalWrite(BOARD_XL9555_02_GPS_EN, LOW);
+    xl9555.digitalWrite(BOARD_XL9555_03_1V8_EN, LOW);
+  }
+}
+
 void initTouch() {
   resetTouchIfAvailable();
   hyn_touch_attach_xl9555(&xl9555);
@@ -427,19 +440,23 @@ void HalGPIO::startDeepSleep() {
     update();
   }
 
-  analogWrite(BOARD_KEYBOARD_LED, 0);
-  analogWrite(BOARD_EPD_BL, 0);
-
-  if (xl9555Ready) {
-    xl9555.digitalWrite(BOARD_XL9555_06_AMPLIFIER, LOW);
-    xl9555.digitalWrite(BOARD_XL9555_05_MOTOR_EN, LOW);
-    xl9555.digitalWrite(BOARD_XL9555_01_LORA_EN, LOW);
-    xl9555.digitalWrite(BOARD_XL9555_02_GPS_EN, LOW);
-    xl9555.digitalWrite(BOARD_XL9555_03_1V8_EN, LOW);
-  }
+  powerDownBoardPeripherals();
 
   esp_sleep_enable_ext0_wakeup(static_cast<gpio_num_t>(BOARD_BOOT_PIN), 0);
   esp_deep_sleep_start();
+}
+
+bool HalGPIO::shutdown() {
+  powerDownBoardPeripherals();
+
+  if (!chargerReady) {
+    LOG_ERR("GPIO", "SY6970 not ready, cannot request shutdown");
+    return false;
+  }
+
+  LOG_INF("GPIO", "Requesting SY6970 shutdown");
+  charger.shutdown();
+  return true;
 }
 
 void HalGPIO::verifyPowerButtonWakeup(const uint16_t requiredDurationMs, const bool shortPressAllowed) {

@@ -25,6 +25,7 @@
 #include "activities/ActivityManager.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include "images/Logo120.h"
 #include "util/ButtonNavigator.h"
 #include "util/ScreenshotUtil.h"
 
@@ -130,12 +131,6 @@ unsigned long t2 = 0;
 // Verify power button press duration on wake-up from deep sleep
 // Pre-condition: isWakeupByPowerButton() == true
 void verifyPowerButtonDuration() {
-  if (SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) {
-    // Fast path for short press
-    // Needed because inputManager.isPressed() may take up to ~500ms to return the correct state
-    return;
-  }
-
   // Give the user up to 1000ms to start holding the power button, and must hold for SETTINGS.getPowerButtonDuration()
   const auto start = millis();
   bool abort = false;
@@ -170,6 +165,7 @@ void verifyPowerButtonDuration() {
     powerManager.startDeepSleep(gpio);
   }
 }
+
 void waitForPowerRelease() {
   gpio.update();
   while (gpio.isPressed(HalGPIO::BTN_POWER)) {
@@ -178,17 +174,39 @@ void waitForPowerRelease() {
   }
 }
 
-// Enter deep sleep mode
-void enterDeepSleep() {
-  HalPowerManager::Lock powerLock;  // Ensure we are at normal CPU frequency for sleep preparation
+void renderPowerOffScreen() {
+  RenderLock lock;
+  renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+
+  const auto pageWidth = renderer.getScreenWidth();
+  const auto pageHeight = renderer.getScreenHeight();
+  const int logoY = std::max(16, (pageHeight - 120) / 2 - 24);
+
+  renderer.clearScreen();
+  renderer.drawImage(Logo120, (pageWidth - 120) / 2, logoY, 120, 120);
+  renderer.drawCenteredText(SMALL_FONT_ID, logoY + 144, "Long press PWR for use");
+
+  // Power the panel off after a full refresh so the retained image stays clean.
+  display.displayBuffer(HalDisplay::FULL_REFRESH, true);
+}
+
+void powerOffDevice(const char* reason) {
+  HalPowerManager::Lock powerLock;  // Ensure we are at normal CPU frequency for shutdown preparation
   APP_STATE.lastSleepFromReader = activityManager.isReaderActivity();
   APP_STATE.saveToFile();
+  LOG_DBG("MAIN", "Powering off (%s)", reason);
 
-  activityManager.goToSleep();
+  renderPowerOffScreen();
+  gpio.shutdown();
+
+  // If system power is still present (for example USB is connected), fall back
+  // to deep sleep after a short grace period.
+  for (int i = 0; i < 50; ++i) {
+    delay(10);
+  }
 
   display.deepSleep();
-  LOG_DBG("MAIN", "Entering deep sleep");
-
+  LOG_DBG("MAIN", "SY6970 shutdown did not remove power, entering deep sleep fallback");
   powerManager.startDeepSleep(gpio);
 }
 
@@ -269,8 +287,7 @@ void setup() {
   switch (wakeupReason) {
     case HalGPIO::WakeupReason::PowerButton:
       LOG_DBG("MAIN", "Verifying power button press duration");
-      gpio.verifyPowerButtonWakeup(SETTINGS.getPowerButtonDuration(),
-                                   SETTINGS.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP);
+      gpio.verifyPowerButtonWakeup(SETTINGS.getPowerButtonDuration(), false);
       break;
     case HalGPIO::WakeupReason::AfterUSBPower:
       // If USB power caused a cold boot, go back to sleep
@@ -370,19 +387,19 @@ void loop() {
 
   const unsigned long sleepTimeoutMs = SETTINGS.getSleepTimeoutMs();
   if (millis() - lastActivityTime >= sleepTimeoutMs) {
-    LOG_DBG("SLP", "Auto-sleep triggered after %lu ms of inactivity", sleepTimeoutMs);
-    enterDeepSleep();
-    // This should never be hit as `enterDeepSleep` calls esp_deep_sleep_start
+    LOG_DBG("PWR", "Auto power-off triggered after %lu ms of inactivity", sleepTimeoutMs);
+    powerOffDevice("auto-timeout");
+    // This should never be hit as `powerOffDevice` powers down or deep-sleeps as fallback
     return;
   }
 
   if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
-    // If the screenshot combination is potentially being pressed, don't sleep
+    // If the screenshot combination is potentially being pressed, don't power off
     if (gpio.isPressed(HalGPIO::BTN_DOWN)) {
       return;
     }
-    enterDeepSleep();
-    // This should never be hit as `enterDeepSleep` calls esp_deep_sleep_start
+    powerOffDevice("power-button");
+    // This should never be hit as `powerOffDevice` powers down or deep-sleeps as fallback
     return;
   }
 

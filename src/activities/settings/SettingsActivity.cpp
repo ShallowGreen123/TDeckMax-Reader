@@ -156,8 +156,24 @@ void SettingsActivity::toggleCurrentSetting() {
     const bool currentValue = SETTINGS.*(setting.valuePtr);
     SETTINGS.*(setting.valuePtr) = !currentValue;
   } else if (setting.type == SettingType::ENUM && setting.valuePtr != nullptr) {
-    const uint8_t currentValue = SETTINGS.*(setting.valuePtr);
-    SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
+    if (setting.valuePtr == &CrossPointSettings::shortPwrBtn) {
+      switch (SETTINGS.shortPwrBtn) {
+        case CrossPointSettings::SHORT_PWRBTN::PAGE_TURN:
+          SETTINGS.shortPwrBtn = CrossPointSettings::SHORT_PWRBTN::FORCE_REFRESH;
+          break;
+        case CrossPointSettings::SHORT_PWRBTN::FORCE_REFRESH:
+          SETTINGS.shortPwrBtn = CrossPointSettings::SHORT_PWRBTN::IGNORE;
+          break;
+        case CrossPointSettings::SHORT_PWRBTN::IGNORE:
+        case CrossPointSettings::SHORT_PWRBTN::SLEEP:
+        default:
+          SETTINGS.shortPwrBtn = CrossPointSettings::SHORT_PWRBTN::PAGE_TURN;
+          break;
+      }
+    } else {
+      const uint8_t currentValue = SETTINGS.*(setting.valuePtr);
+      SETTINGS.*(setting.valuePtr) = (currentValue + 1) % static_cast<uint8_t>(setting.enumValues.size());
+    }
   } else if (setting.type == SettingType::VALUE && setting.valuePtr != nullptr) {
     const int8_t currentValue = SETTINGS.*(setting.valuePtr);
     if (currentValue + setting.valueRange.step > setting.valueRange.max) {

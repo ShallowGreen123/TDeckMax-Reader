@@ -29,6 +29,12 @@ constexpr char SETTINGS_FILE_BAK[] = "/.crosspoint/settings.bin.bak";
 
 constexpr size_t kKeyBindingCount = 7;
 
+void migrateDeprecatedPowerButtonSleep(CrossPointSettings& settings) {
+  if (settings.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) {
+    settings.shortPwrBtn = CrossPointSettings::SHORT_PWRBTN::IGNORE;
+  }
+}
+
 // Convert legacy front button layout into explicit logical->hardware mapping.
 void applyLegacyFrontButtonLayout(CrossPointSettings& settings) {
   switch (static_cast<CrossPointSettings::FRONT_BUTTON_LAYOUT>(settings.frontButtonLayout)) {
@@ -185,6 +191,7 @@ bool CrossPointSettings::loadFromFile() {
     if (!json.isEmpty()) {
       bool resave = false;
       bool result = JsonSettingsIO::loadSettings(*this, json.c_str(), &resave);
+      migrateDeprecatedPowerButtonSleep(*this);
       if (result && resave) {
         if (saveToFile()) {
           LOG_DBG("CPS", "Resaved settings to update format");
@@ -315,6 +322,7 @@ bool CrossPointSettings::loadFromBinaryFile() {
   } else {
     applyLegacyFrontButtonLayout(*this);
   }
+  migrateDeprecatedPowerButtonSleep(*this);
   CrossPointSettings::applyLegacyFrontButtonKeyBindings(*this);
   CrossPointSettings::validateKeyBindings(*this);
 

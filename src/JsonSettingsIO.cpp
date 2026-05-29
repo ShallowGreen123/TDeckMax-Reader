@@ -231,6 +231,11 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   }
 
   // Front button remap — managed by RemapFrontButtons sub-activity, not in SettingsList.
+  if (s.shortPwrBtn == CrossPointSettings::SHORT_PWRBTN::SLEEP) {
+    s.shortPwrBtn = CrossPointSettings::SHORT_PWRBTN::IGNORE;
+    if (needsResave) *needsResave = true;
+  }
+
   using S = CrossPointSettings;
   s.frontButtonBack =
       clamp(doc["frontButtonBack"] | (uint8_t)S::FRONT_HW_BACK, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_BACK);
