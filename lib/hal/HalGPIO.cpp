@@ -454,6 +454,11 @@ bool HalGPIO::shutdown() {
     return false;
   }
 
+  if (charger.isVbusIn()) {
+    LOG_INF("GPIO", "USB power is present, skip SY6970 shutdown request");
+    return false;
+  }
+
   LOG_INF("GPIO", "Requesting SY6970 shutdown");
   charger.shutdown();
   return true;
@@ -551,7 +556,7 @@ HalGPIO::WakeupReason HalGPIO::getWakeupReason() const {
   }
 
   if (resetReason == ESP_RST_POWERON) {
-    return isUsbConnected() ? WakeupReason::AfterUSBPower : WakeupReason::PowerButton;
+    return isUsbConnected() ? WakeupReason::AfterUSBPower : WakeupReason::PowerButtonColdBoot;
   }
 
   if (resetReason == ESP_RST_SW || resetReason == ESP_RST_UNKNOWN) {

@@ -50,7 +50,7 @@ class HalGPIO {
   bool readChargerStatus(HalChargerStatusSnapshot& snapshot) const;
   bool initFuelGaugeModel();
 
-  enum class WakeupReason { PowerButton, AfterFlash, AfterUSBPower, Other };
+  enum class WakeupReason { PowerButton, PowerButtonColdBoot, AfterFlash, AfterUSBPower, Other };
   WakeupReason getWakeupReason() const;
 
   static constexpr uint8_t BTN_BACK = 0;

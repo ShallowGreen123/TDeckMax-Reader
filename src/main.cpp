@@ -190,24 +190,31 @@ void renderPowerOffScreen() {
   display.displayBuffer(HalDisplay::FULL_REFRESH, true);
 }
 
-void powerOffDevice(const char* reason) {
-  HalPowerManager::Lock powerLock;  // Ensure we are at normal CPU frequency for shutdown preparation
-  APP_STATE.lastSleepFromReader = activityManager.isReaderActivity();
-  APP_STATE.saveToFile();
-  LOG_DBG("MAIN", "Powering off (%s)", reason);
+bool powerOffDevice(const char* reason) {
+  if (gpio.isUsbConnected()) {
+    LOG_DBG("MAIN", "Skip power-off (%s) because USB is connected", reason);
+    return false;
+  }
 
-  renderPowerOffScreen();
-  gpio.shutdown();
+  {
+    HalPowerManager::Lock powerLock;  // Ensure we are at normal CPU frequency for shutdown preparation
+    APP_STATE.lastSleepFromReader = activityManager.isReaderActivity();
+    APP_STATE.saveToFile();
+    LOG_DBG("MAIN", "Powering off (%s)", reason);
 
-  // If system power is still present (for example USB is connected), fall back
-  // to deep sleep after a short grace period.
-  for (int i = 0; i < 50; ++i) {
-    delay(10);
+    renderPowerOffScreen();
+    if (gpio.shutdown()) {
+      // Give SY6970 enough time to fully collapse VSYS before falling back.
+      delay(1500);
+      LOG_DBG("MAIN", "SY6970 shutdown returned but device is still running; entering deep sleep fallback");
+    } else {
+      LOG_DBG("MAIN", "SY6970 shutdown unavailable or rejected; entering deep sleep fallback");
+    }
   }
 
   display.deepSleep();
-  LOG_DBG("MAIN", "SY6970 shutdown did not remove power, entering deep sleep fallback");
   powerManager.startDeepSleep(gpio);
+  return true;
 }
 
 void setupDisplayAndFonts() {
@@ -289,10 +296,17 @@ void setup() {
       LOG_DBG("MAIN", "Verifying power button press duration");
       gpio.verifyPowerButtonWakeup(SETTINGS.getPowerButtonDuration(), false);
       break;
+    case HalGPIO::WakeupReason::PowerButtonColdBoot:
+      // After a real power-off, the hardware power latch has already accepted
+      // the key press, so don't force the user to still be holding BOOT once
+      // firmware reaches setup().
+      LOG_DBG("MAIN", "Cold boot from power button");
+      gpio.verifyPowerButtonWakeup(10, true);
+      break;
     case HalGPIO::WakeupReason::AfterUSBPower:
-      // If USB power caused a cold boot, go back to sleep
-      LOG_DBG("MAIN", "Wakeup reason: After USB Power");
-      powerManager.startDeepSleep(gpio);
+      // SY6970 can auto-boot the board when USB is inserted after a real
+      // power-off, so allow this cold boot to proceed into the main system.
+      LOG_DBG("MAIN", "Wakeup reason: After USB Power, continuing boot");
       break;
     case HalGPIO::WakeupReason::AfterFlash:
       // After flashing, just proceed to boot
@@ -387,20 +401,28 @@ void loop() {
 
   const unsigned long sleepTimeoutMs = SETTINGS.getSleepTimeoutMs();
   if (millis() - lastActivityTime >= sleepTimeoutMs) {
-    LOG_DBG("PWR", "Auto power-off triggered after %lu ms of inactivity", sleepTimeoutMs);
-    powerOffDevice("auto-timeout");
-    // This should never be hit as `powerOffDevice` powers down or deep-sleeps as fallback
-    return;
+    if (powerOffDevice("auto-timeout")) {
+      LOG_DBG("PWR", "Auto power-off triggered after %lu ms of inactivity", sleepTimeoutMs);
+      // This should never be hit as `powerOffDevice` powers down or deep-sleeps as fallback
+      return;
+    }
+    LOG_DBG("PWR", "Auto power-off skipped after %lu ms of inactivity because USB is connected", sleepTimeoutMs);
+    lastActivityTime = millis();
   }
 
-  if (gpio.isPressed(HalGPIO::BTN_POWER) && gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
+  static bool powerButtonPowerOffHandled = false;
+  if (!gpio.isPressed(HalGPIO::BTN_POWER)) {
+    powerButtonPowerOffHandled = false;
+  } else if (!powerButtonPowerOffHandled && gpio.getHeldTime() > SETTINGS.getPowerButtonDuration()) {
     // If the screenshot combination is potentially being pressed, don't power off
     if (gpio.isPressed(HalGPIO::BTN_DOWN)) {
       return;
     }
-    powerOffDevice("power-button");
-    // This should never be hit as `powerOffDevice` powers down or deep-sleeps as fallback
-    return;
+    powerButtonPowerOffHandled = true;
+    if (powerOffDevice("power-button")) {
+      // This should never be hit as `powerOffDevice` powers down or deep-sleeps as fallback
+      return;
+    }
   }
 
   // Refresh screen when power button is short-pressed with FORCE_REFRESH setting.
