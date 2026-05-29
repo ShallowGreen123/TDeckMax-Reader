@@ -134,6 +134,43 @@ class CrossPointSettings {
   // UI Theme
   enum UI_THEME { CLASSIC = 0, LYRA = 1, LYRA_3_COVERS = 2, ROUNDEDRAFF = 3 };
 
+  // Bindable raw keyboard keys on T-Deck-Max.
+  enum KEY_BINDING {
+    KEY_BIND_BOOT = 0,
+    KEY_BIND_A,
+    KEY_BIND_B,
+    KEY_BIND_C,
+    KEY_BIND_D,
+    KEY_BIND_E,
+    KEY_BIND_F,
+    KEY_BIND_G,
+    KEY_BIND_H,
+    KEY_BIND_I,
+    KEY_BIND_J,
+    KEY_BIND_K,
+    KEY_BIND_L,
+    KEY_BIND_M,
+    KEY_BIND_N,
+    KEY_BIND_O,
+    KEY_BIND_P,
+    KEY_BIND_Q,
+    KEY_BIND_R,
+    KEY_BIND_S,
+    KEY_BIND_T,
+    KEY_BIND_U,
+    KEY_BIND_V,
+    KEY_BIND_W,
+    KEY_BIND_X,
+    KEY_BIND_Y,
+    KEY_BIND_Z,
+    KEY_BIND_0,
+    KEY_BIND_2,
+    KEY_BIND_SPACE,
+    KEY_BIND_DEL,
+    KEY_BIND_ENT,
+    KEY_BINDING_COUNT
+  };
+
   // Image rendering in EPUB reader
   enum IMAGE_RENDERING { IMAGES_DISPLAY = 0, IMAGES_PLACEHOLDER = 1, IMAGES_SUPPRESS = 2, IMAGE_RENDERING_COUNT };
 
@@ -191,6 +228,14 @@ class CrossPointSettings {
   uint8_t longPressChapterSkip = 1;
   // UI Theme
   uint8_t uiTheme = LYRA;
+  // T-Deck-Max keyboard bindings for logical buttons
+  uint8_t keyBindingBack = KEY_BIND_DEL;
+  uint8_t keyBindingConfirm = KEY_BIND_ENT;
+  uint8_t keyBindingLeft = KEY_BIND_A;
+  uint8_t keyBindingRight = KEY_BIND_D;
+  uint8_t keyBindingUp = KEY_BIND_W;
+  uint8_t keyBindingDown = KEY_BIND_S;
+  uint8_t keyBindingPower = KEY_BIND_BOOT;
   // Sunlight fading compensation
   uint8_t fadingFix = 0;
   // Use book's embedded CSS styles for EPUB rendering (1 = enabled, 0 = disabled)
@@ -217,6 +262,11 @@ class CrossPointSettings {
   bool loadFromFile();
 
   static void validateFrontButtonMapping(CrossPointSettings& settings);
+  static void resetKeyBindingDefaults(CrossPointSettings& settings);
+  static void applyLegacyFrontButtonKeyBindings(CrossPointSettings& settings);
+  static void validateKeyBindings(CrossPointSettings& settings);
+  static bool isKeyboardKeyBinding(uint8_t binding);
+  static bool isAllowedKeyBinding(uint8_t binding, bool allowBoot);
 
  private:
   bool loadFromBinaryFile();

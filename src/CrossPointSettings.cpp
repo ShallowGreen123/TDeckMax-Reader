@@ -27,6 +27,8 @@ constexpr char SETTINGS_FILE_BIN[] = "/.crosspoint/settings.bin";
 constexpr char SETTINGS_FILE_JSON[] = "/.crosspoint/settings.json";
 constexpr char SETTINGS_FILE_BAK[] = "/.crosspoint/settings.bin.bak";
 
+constexpr size_t kKeyBindingCount = 7;
+
 // Convert legacy front button layout into explicit logical->hardware mapping.
 void applyLegacyFrontButtonLayout(CrossPointSettings& settings) {
   switch (static_cast<CrossPointSettings::FRONT_BUTTON_LAYOUT>(settings.frontButtonLayout)) {
@@ -58,6 +60,48 @@ void applyLegacyFrontButtonLayout(CrossPointSettings& settings) {
   }
 }
 
+uint8_t defaultKeyBindingForIndex(const size_t index) {
+  switch (index) {
+    case 0:
+      return CrossPointSettings::KEY_BIND_DEL;
+    case 1:
+      return CrossPointSettings::KEY_BIND_ENT;
+    case 2:
+      return CrossPointSettings::KEY_BIND_A;
+    case 3:
+      return CrossPointSettings::KEY_BIND_D;
+    case 4:
+      return CrossPointSettings::KEY_BIND_W;
+    case 5:
+      return CrossPointSettings::KEY_BIND_S;
+    case 6:
+    default:
+      return CrossPointSettings::KEY_BIND_BOOT;
+  }
+}
+
+uint8_t* keyBindingFields(CrossPointSettings& settings) {
+  return &settings.keyBindingBack;
+}
+
+const uint8_t* keyBindingFields(const CrossPointSettings& settings) {
+  return &settings.keyBindingBack;
+}
+
+uint8_t legacyFrontHardwareToKeyBinding(const uint8_t frontHardware) {
+  switch (frontHardware) {
+    case CrossPointSettings::FRONT_HW_BACK:
+      return CrossPointSettings::KEY_BIND_DEL;
+    case CrossPointSettings::FRONT_HW_CONFIRM:
+      return CrossPointSettings::KEY_BIND_ENT;
+    case CrossPointSettings::FRONT_HW_LEFT:
+      return CrossPointSettings::KEY_BIND_A;
+    case CrossPointSettings::FRONT_HW_RIGHT:
+    default:
+      return CrossPointSettings::KEY_BIND_D;
+  }
+}
+
 }  // namespace
 
 void CrossPointSettings::validateFrontButtonMapping(CrossPointSettings& settings) {
@@ -73,6 +117,59 @@ void CrossPointSettings::validateFrontButtonMapping(CrossPointSettings& settings
         return;
       }
     }
+  }
+}
+
+void CrossPointSettings::resetKeyBindingDefaults(CrossPointSettings& settings) {
+  uint8_t* bindings = keyBindingFields(settings);
+  for (size_t i = 0; i < kKeyBindingCount; ++i) {
+    bindings[i] = defaultKeyBindingForIndex(i);
+  }
+}
+
+bool CrossPointSettings::isKeyboardKeyBinding(const uint8_t binding) {
+  return binding > KEY_BIND_BOOT && binding < KEY_BINDING_COUNT;
+}
+
+bool CrossPointSettings::isAllowedKeyBinding(const uint8_t binding, const bool allowBoot) {
+  if (binding >= KEY_BINDING_COUNT) {
+    return false;
+  }
+  return allowBoot ? (binding == KEY_BIND_BOOT || isKeyboardKeyBinding(binding)) : isKeyboardKeyBinding(binding);
+}
+
+void CrossPointSettings::applyLegacyFrontButtonKeyBindings(CrossPointSettings& settings) {
+  settings.keyBindingBack = legacyFrontHardwareToKeyBinding(settings.frontButtonBack);
+  settings.keyBindingConfirm = legacyFrontHardwareToKeyBinding(settings.frontButtonConfirm);
+  settings.keyBindingLeft = legacyFrontHardwareToKeyBinding(settings.frontButtonLeft);
+  settings.keyBindingRight = legacyFrontHardwareToKeyBinding(settings.frontButtonRight);
+  settings.keyBindingUp = KEY_BIND_W;
+  settings.keyBindingDown = KEY_BIND_S;
+  settings.keyBindingPower = KEY_BIND_BOOT;
+}
+
+void CrossPointSettings::validateKeyBindings(CrossPointSettings& settings) {
+  uint8_t candidate[kKeyBindingCount];
+  bool duplicate[kKeyBindingCount] = {false};
+  uint8_t* bindings = keyBindingFields(settings);
+
+  for (size_t i = 0; i < kKeyBindingCount; ++i) {
+    const bool allowBoot = i == (kKeyBindingCount - 1);
+    const uint8_t fallback = defaultKeyBindingForIndex(i);
+    candidate[i] = isAllowedKeyBinding(bindings[i], allowBoot) ? bindings[i] : fallback;
+  }
+
+  for (size_t i = 0; i < kKeyBindingCount; ++i) {
+    for (size_t j = i + 1; j < kKeyBindingCount; ++j) {
+      if (candidate[i] == candidate[j]) {
+        duplicate[i] = true;
+        duplicate[j] = true;
+      }
+    }
+  }
+
+  for (size_t i = 0; i < kKeyBindingCount; ++i) {
+    bindings[i] = duplicate[i] ? defaultKeyBindingForIndex(i) : candidate[i];
   }
 }
 
@@ -218,6 +315,8 @@ bool CrossPointSettings::loadFromBinaryFile() {
   } else {
     applyLegacyFrontButtonLayout(*this);
   }
+  CrossPointSettings::applyLegacyFrontButtonKeyBindings(*this);
+  CrossPointSettings::validateKeyBindings(*this);
 
   LOG_DBG("CPS", "Settings loaded from binary file");
   return true;

@@ -65,6 +65,21 @@ void applyLegacyStatusBarSettings(CrossPointSettings& settings) {
   }
 }
 
+uint8_t loadKeyBindingField(const JsonDocument& doc, const char* key, const uint8_t fallback) {
+  return doc[key] | fallback;
+}
+
+bool hasAnyKeyBindingFields(const JsonDocument& doc) {
+  return !doc["keyBindingBack"].isNull() || !doc["keyBindingConfirm"].isNull() || !doc["keyBindingLeft"].isNull() ||
+         !doc["keyBindingRight"].isNull() || !doc["keyBindingUp"].isNull() || !doc["keyBindingDown"].isNull() ||
+         !doc["keyBindingPower"].isNull();
+}
+
+bool hasLegacyFrontBindingFields(const JsonDocument& doc) {
+  return !doc["frontButtonBack"].isNull() || !doc["frontButtonConfirm"].isNull() || !doc["frontButtonLeft"].isNull() ||
+         !doc["frontButtonRight"].isNull();
+}
+
 // ---- CrossPointState ----
 
 bool JsonSettingsIO::saveState(const CrossPointState& s, const char* path) {
@@ -140,6 +155,13 @@ bool JsonSettingsIO::saveSettings(const CrossPointSettings& s, const char* path)
   doc["frontButtonConfirm"] = s.frontButtonConfirm;
   doc["frontButtonLeft"] = s.frontButtonLeft;
   doc["frontButtonRight"] = s.frontButtonRight;
+  doc["keyBindingBack"] = s.keyBindingBack;
+  doc["keyBindingConfirm"] = s.keyBindingConfirm;
+  doc["keyBindingLeft"] = s.keyBindingLeft;
+  doc["keyBindingRight"] = s.keyBindingRight;
+  doc["keyBindingUp"] = s.keyBindingUp;
+  doc["keyBindingDown"] = s.keyBindingDown;
+  doc["keyBindingPower"] = s.keyBindingPower;
 
   String json;
   serializeJson(doc, json);
@@ -219,6 +241,36 @@ bool JsonSettingsIO::loadSettings(CrossPointSettings& s, const char* json, bool*
   s.frontButtonRight =
       clamp(doc["frontButtonRight"] | (uint8_t)S::FRONT_HW_RIGHT, S::FRONT_BUTTON_HARDWARE_COUNT, S::FRONT_HW_RIGHT);
   CrossPointSettings::validateFrontButtonMapping(s);
+
+  const bool hasNewKeyBindings = hasAnyKeyBindingFields(doc);
+  if (hasNewKeyBindings) {
+    s.keyBindingBack = loadKeyBindingField(doc, "keyBindingBack", s.keyBindingBack);
+    s.keyBindingConfirm = loadKeyBindingField(doc, "keyBindingConfirm", s.keyBindingConfirm);
+    s.keyBindingLeft = loadKeyBindingField(doc, "keyBindingLeft", s.keyBindingLeft);
+    s.keyBindingRight = loadKeyBindingField(doc, "keyBindingRight", s.keyBindingRight);
+    s.keyBindingUp = loadKeyBindingField(doc, "keyBindingUp", s.keyBindingUp);
+    s.keyBindingDown = loadKeyBindingField(doc, "keyBindingDown", s.keyBindingDown);
+    s.keyBindingPower = loadKeyBindingField(doc, "keyBindingPower", s.keyBindingPower);
+  } else if (hasLegacyFrontBindingFields(doc)) {
+    CrossPointSettings::applyLegacyFrontButtonKeyBindings(s);
+    if (needsResave) *needsResave = true;
+  }
+
+  const uint8_t beforeKeyBindingBack = s.keyBindingBack;
+  const uint8_t beforeKeyBindingConfirm = s.keyBindingConfirm;
+  const uint8_t beforeKeyBindingLeft = s.keyBindingLeft;
+  const uint8_t beforeKeyBindingRight = s.keyBindingRight;
+  const uint8_t beforeKeyBindingUp = s.keyBindingUp;
+  const uint8_t beforeKeyBindingDown = s.keyBindingDown;
+  const uint8_t beforeKeyBindingPower = s.keyBindingPower;
+  CrossPointSettings::validateKeyBindings(s);
+  if (needsResave &&
+      (beforeKeyBindingBack != s.keyBindingBack || beforeKeyBindingConfirm != s.keyBindingConfirm ||
+       beforeKeyBindingLeft != s.keyBindingLeft || beforeKeyBindingRight != s.keyBindingRight ||
+       beforeKeyBindingUp != s.keyBindingUp || beforeKeyBindingDown != s.keyBindingDown ||
+       beforeKeyBindingPower != s.keyBindingPower)) {
+    *needsResave = true;
+  }
 
   LOG_DBG("CPS", "Settings loaded from file");
 

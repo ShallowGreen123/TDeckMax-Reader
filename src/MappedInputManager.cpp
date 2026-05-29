@@ -1,70 +1,69 @@
 #include "MappedInputManager.h"
 
+#include <algorithm>
+
 #include "CrossPointSettings.h"
 
 namespace {
 using ButtonIndex = uint8_t;
 
-struct SideLayoutMap {
-  ButtonIndex pageBack;
-  ButtonIndex pageForward;
-};
+static_assert(HalGPIO::RAW_BINDABLE_KEY_COUNT == CrossPointSettings::KEY_BINDING_COUNT, "Key binding count mismatch");
 
-// Order matches CrossPointSettings::SIDE_BUTTON_LAYOUT.
-constexpr SideLayoutMap kSideLayouts[] = {
-    {HalGPIO::BTN_UP, HalGPIO::BTN_DOWN},
-    {HalGPIO::BTN_DOWN, HalGPIO::BTN_UP},
-};
+uint8_t getBindingForButton(const MappedInputManager::Button button) {
+  const auto sideLayout = static_cast<CrossPointSettings::SIDE_BUTTON_LAYOUT>(SETTINGS.sideButtonLayout);
+
+  switch (button) {
+    case MappedInputManager::Button::Back:
+      return SETTINGS.keyBindingBack;
+    case MappedInputManager::Button::Confirm:
+      return SETTINGS.keyBindingConfirm;
+    case MappedInputManager::Button::Left:
+      return SETTINGS.keyBindingLeft;
+    case MappedInputManager::Button::Right:
+      return SETTINGS.keyBindingRight;
+    case MappedInputManager::Button::Up:
+      return SETTINGS.keyBindingUp;
+    case MappedInputManager::Button::Down:
+      return SETTINGS.keyBindingDown;
+    case MappedInputManager::Button::Power:
+      return SETTINGS.keyBindingPower;
+    case MappedInputManager::Button::PageBack:
+      return sideLayout == CrossPointSettings::SIDE_BUTTON_LAYOUT::PREV_NEXT ? SETTINGS.keyBindingUp
+                                                                             : SETTINGS.keyBindingDown;
+    case MappedInputManager::Button::PageForward:
+    default:
+      return sideLayout == CrossPointSettings::SIDE_BUTTON_LAYOUT::PREV_NEXT ? SETTINGS.keyBindingDown
+                                                                             : SETTINGS.keyBindingUp;
+  }
+}
 }  // namespace
 
 bool MappedInputManager::mapButton(const Button button, bool (HalGPIO::*fn)(uint8_t) const) const {
-  const auto sideLayout = static_cast<CrossPointSettings::SIDE_BUTTON_LAYOUT>(SETTINGS.sideButtonLayout);
-  const auto& side = kSideLayouts[sideLayout];
-
-  switch (button) {
-    case Button::Back:
-      // Logical Back maps to user-configured front button.
-      return (gpio.*fn)(SETTINGS.frontButtonBack);
-    case Button::Confirm:
-      // Logical Confirm maps to user-configured front button.
-      return (gpio.*fn)(SETTINGS.frontButtonConfirm);
-    case Button::Left:
-      // Logical Left maps to user-configured front button.
-      return (gpio.*fn)(SETTINGS.frontButtonLeft);
-    case Button::Right:
-      // Logical Right maps to user-configured front button.
-      return (gpio.*fn)(SETTINGS.frontButtonRight);
-    case Button::Up:
-      // Side buttons remain fixed for Up/Down.
-      return (gpio.*fn)(HalGPIO::BTN_UP);
-    case Button::Down:
-      // Side buttons remain fixed for Up/Down.
-      return (gpio.*fn)(HalGPIO::BTN_DOWN);
-    case Button::Power:
-      // Power button bypasses remapping.
-      return (gpio.*fn)(HalGPIO::BTN_POWER);
-    case Button::PageBack:
-      // Reader page navigation uses side buttons and can be swapped via settings.
-      return (gpio.*fn)(side.pageBack);
-    case Button::PageForward:
-      // Reader page navigation uses side buttons and can be swapped via settings.
-      return (gpio.*fn)(side.pageForward);
-  }
-
-  return false;
+  return (gpio.*fn)(getBindingForButton(button));
 }
 
-bool MappedInputManager::wasPressed(const Button button) const { return mapButton(button, &HalGPIO::wasPressed); }
+bool MappedInputManager::wasPressed(const Button button) const { return mapButton(button, &HalGPIO::wasRawKeyPressed); }
 
-bool MappedInputManager::wasReleased(const Button button) const { return mapButton(button, &HalGPIO::wasReleased); }
+bool MappedInputManager::wasReleased(const Button button) const {
+  return mapButton(button, &HalGPIO::wasRawKeyReleased);
+}
 
-bool MappedInputManager::isPressed(const Button button) const { return mapButton(button, &HalGPIO::isPressed); }
+bool MappedInputManager::isPressed(const Button button) const { return mapButton(button, &HalGPIO::isRawKeyPressed); }
 
 bool MappedInputManager::wasAnyPressed() const { return gpio.wasAnyPressed(); }
 
 bool MappedInputManager::wasAnyReleased() const { return gpio.wasAnyReleased(); }
 
-unsigned long MappedInputManager::getHeldTime() const { return gpio.getHeldTime(); }
+unsigned long MappedInputManager::getHeldTime() const {
+  unsigned long heldTime = 0;
+  constexpr Button buttons[] = {Button::Back,  Button::Confirm, Button::Left,     Button::Right, Button::Up,
+                                Button::Down, Button::Power,   Button::PageBack, Button::PageForward};
+  for (const Button button : buttons) {
+    const uint8_t binding = getBindingForButton(button);
+    heldTime = std::max(heldTime, gpio.getRawKeyHeldTime(binding));
+  }
+  return heldTime;
+}
 
 MappedInputManager::Labels MappedInputManager::mapLabels(const char* back, const char* confirm, const char* previous,
                                                          const char* next) const {

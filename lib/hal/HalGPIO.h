@@ -16,6 +16,11 @@ class HalGPIO {
   bool wasReleased(uint8_t buttonIndex) const;
   bool wasAnyReleased() const;
   unsigned long getHeldTime() const;
+  bool isRawKeyPressed(uint8_t keyCode) const;
+  bool wasRawKeyPressed(uint8_t keyCode) const;
+  bool wasRawKeyReleased(uint8_t keyCode) const;
+  unsigned long getRawKeyHeldTime(uint8_t keyCode) const;
+  int getLastPressedBindableKey() const;
 
   void startDeepSleep();
   void verifyPowerButtonWakeup(uint16_t requiredDurationMs, bool shortPressAllowed);
@@ -34,6 +39,7 @@ class HalGPIO {
   static constexpr uint8_t BTN_DOWN = 5;
   static constexpr uint8_t BTN_POWER = 6;
   static constexpr uint8_t BUTTON_COUNT = 7;
+  static constexpr uint8_t RAW_BINDABLE_KEY_COUNT = 32;
   static constexpr uint32_t I2C_FREQUENCY = 400000;
 
  private:
@@ -41,6 +47,11 @@ class HalGPIO {
   bool buttonPressedEdge[BUTTON_COUNT] = {false};
   bool buttonReleasedEdge[BUTTON_COUNT] = {false};
   unsigned long buttonPressedSince[BUTTON_COUNT] = {0};
+  bool rawKeyState[RAW_BINDABLE_KEY_COUNT] = {false};
+  bool rawKeyPressedEdge[RAW_BINDABLE_KEY_COUNT] = {false};
+  bool rawKeyReleasedEdge[RAW_BINDABLE_KEY_COUNT] = {false};
+  unsigned long rawKeyPressedSince[RAW_BINDABLE_KEY_COUNT] = {0};
+  int lastPressedBindableKey = -1;
 
   bool lastUsbConnected = false;
   bool usbStateChanged = false;
