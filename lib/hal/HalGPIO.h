@@ -3,6 +3,25 @@
 #include <Arduino.h>
 #include <TDeckMaxBoard.h>
 
+struct HalChargerStatusSnapshot {
+  bool chargerReady = false;
+  bool readOk = false;
+  bool vbusConnected = false;
+  bool charging = false;
+  bool chargeDone = false;
+  uint8_t busType = 0xFF;
+  uint8_t chargeState = 0xFF;
+  uint8_t faultStatusRaw = 0;
+  uint16_t vbusVoltageMv = 0;
+  uint16_t systemVoltageMv = 0;
+  uint16_t batteryVoltageMv = 0;
+  uint16_t chargeCurrentAdcMa = 0;
+  uint16_t inputLimitMa = 0;
+  uint16_t targetVoltageMv = 0;
+  uint16_t targetCurrentMa = 0;
+  uint16_t prechargeCurrentMa = 0;
+};
+
 class HalGPIO {
  public:
   HalGPIO() = default;
@@ -27,6 +46,7 @@ class HalGPIO {
 
   bool isUsbConnected() const;
   bool wasUsbStateChanged() const;
+  bool readChargerStatus(HalChargerStatusSnapshot& snapshot) const;
 
   enum class WakeupReason { PowerButton, AfterFlash, AfterUSBPower, Other };
   WakeupReason getWakeupReason() const;

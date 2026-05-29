@@ -1,5 +1,6 @@
 #include "SettingsActivity.h"
 
+#include "BatteryStatusActivity.h"
 #include <GfxRenderer.h>
 #include <Logging.h>
 
@@ -45,6 +46,7 @@ void SettingsActivity::onEnter() {
 
   // Append device-only ACTION items
   controlsSettings.push_back(SettingInfo::Action(StrId::STR_KEYBOARD_MAPPING, SettingAction::KeyboardKeyMapping));
+  controlsSettings.push_back(SettingInfo::Action(StrId::STR_BATTERY_STATUS, SettingAction::BatteryStatus));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_KOREADER_SYNC, SettingAction::KOReaderSync));
   systemSettings.push_back(SettingInfo::Action(StrId::STR_OPDS_SERVERS, SettingAction::OPDSBrowser));
@@ -169,6 +171,9 @@ void SettingsActivity::toggleCurrentSetting() {
     switch (setting.action) {
       case SettingAction::KeyboardKeyMapping:
         startActivityForResult(std::make_unique<KeyboardKeyMappingActivity>(renderer, mappedInput), resultHandler);
+        break;
+      case SettingAction::BatteryStatus:
+        startActivityForResult(std::make_unique<BatteryStatusActivity>(renderer, mappedInput), resultHandler);
         break;
       case SettingAction::CustomiseStatusBar:
         startActivityForResult(std::make_unique<StatusBarSettingsActivity>(renderer, mappedInput), resultHandler);

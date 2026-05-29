@@ -170,6 +170,25 @@ void initCharger() {
   charger.disableADCMeasure();
 }
 
+bool readChargerRegister(const uint8_t reg, uint8_t& value) {
+  Wire.beginTransmission(SY6970_SLAVE_ADDRESS);
+  Wire.write(reg);
+  if (Wire.endTransmission(false) != 0) {
+    return false;
+  }
+
+  if (Wire.requestFrom(static_cast<uint8_t>(SY6970_SLAVE_ADDRESS), static_cast<uint8_t>(1), static_cast<uint8_t>(true)) <
+      1) {
+    while (Wire.available()) {
+      Wire.read();
+    }
+    return false;
+  }
+
+  value = Wire.read();
+  return true;
+}
+
 uint8_t mapKeyToButton(const char key) {
   switch (key) {
     case KEYPAD_KEY_DEL:
@@ -440,6 +459,36 @@ void HalGPIO::verifyPowerButtonWakeup(const uint16_t requiredDurationMs, const b
 bool HalGPIO::isUsbConnected() const { return chargerReady ? charger.isVbusIn() : false; }
 
 bool HalGPIO::wasUsbStateChanged() const { return usbStateChanged; }
+
+bool HalGPIO::readChargerStatus(HalChargerStatusSnapshot& snapshot) const {
+  snapshot = {};
+  snapshot.chargerReady = chargerReady;
+  if (!chargerReady) {
+    return false;
+  }
+
+  uint8_t statusReg = 0;
+  if (!readChargerRegister(0x0B, statusReg)) {
+    return false;
+  }
+
+  snapshot.readOk = true;
+  snapshot.vbusConnected = charger.isVbusIn();
+  snapshot.charging = charger.isCharging();
+  snapshot.chargeDone = charger.isChargeDone();
+  snapshot.busType = static_cast<uint8_t>(charger.getBusStatus());
+  snapshot.chargeState = static_cast<uint8_t>(charger.chargeStatus());
+  snapshot.vbusVoltageMv = charger.getVbusVoltage();
+  snapshot.systemVoltageMv = charger.getSystemVoltage();
+  snapshot.batteryVoltageMv = charger.getBattVoltage();
+  snapshot.chargeCurrentAdcMa = charger.getChargeCurrent();
+  snapshot.inputLimitMa = static_cast<uint16_t>(charger.getInputCurrentLimit());
+  snapshot.targetVoltageMv = charger.getChargeTargetVoltage();
+  snapshot.targetCurrentMa = charger.getChargerConstantCurr();
+  snapshot.prechargeCurrentMa = charger.getPrechargeCurr();
+  snapshot.faultStatusRaw = charger.getFaultStatus();
+  return true;
+}
 
 HalGPIO::WakeupReason HalGPIO::getWakeupReason() const {
   const auto wakeupCause = esp_sleep_get_wakeup_cause();
