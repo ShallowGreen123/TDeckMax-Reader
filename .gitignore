@@ -17,4 +17,4 @@ build
 *.local*
 
 .pio-core-local
-debug.md
+others

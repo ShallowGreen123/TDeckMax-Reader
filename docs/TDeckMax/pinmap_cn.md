@@ -1,5 +1,7 @@
 # T-Deck Pro Max 引脚映射（V0.1 / 2025-09-11）
 
+[English](./pinmap.md) | `中文`
+
 > 本文按 `hardware/T-Deck Pro Max V0.1 25-09-11/T-Deck Pro Max V0.1 25-09-11.pdf` 整理，并交叉核对了仓库当前 `readme.md`、`readme_cn.md` 与 `examples/factory/utilities.h`。
 
 > 本文按模块分类整理。原理图里部分网络名按外设视角命名，例如 `GPS_TX`、`7682_RXD`、`I2S_DSDIN`；文中会同时注明仓库里常见的板级宏名。

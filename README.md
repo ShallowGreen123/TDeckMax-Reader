@@ -1,197 +1,183 @@
-# CrossPoint Reader
+# T-Deck-Max CrossPoint Port
 
-Firmware for the **Xteink X4** e-paper display reader (unaffiliated with Xteink).
-Built using **PlatformIO** and targeting the **ESP32-C3** microcontroller.
+`English` | [中文](./READMD_CN.md)
 
-CrossPoint Reader is a purpose-built firmware designed to be a drop-in, fully open-source replacement for the official 
-Xteink firmware. It aims to match or improve upon the standard EPUB reading experience.
+## 1. Thanks and Project Changes
 
-![](./docs/images/cover.jpg)
+First, thanks to the authors and contributors of the [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) open-source project.
+This project provides a complete, readable, and extensible open-source firmware foundation for e-paper readers, and makes it practical to port the software to other hardware platforms.
 
-## Motivation
+This repository follows the CrossPoint design approach and reader architecture, and has been adapted and extended for **LilyGO T-Deck-Max**. The main completed changes include:
 
-E-paper devices are fantastic for reading, but most commercially available readers are closed systems with limited 
-customisation. The **Xteink X4** is an affordable, e-paper device, however the official firmware remains closed.
-CrossPoint exists partly as a fun side-project and partly to open up the ecosystem and truly unlock the device's
-potential.
+- Porting the original firmware from the Xteink X4 target to the **T-Deck-Max / ESP32-S3** platform.
+- Adapting the firmware for the T-Deck-Max **240 x 320 e-paper display**, keyboard matrix, power management, charging, and battery monitoring.
+- Rebuilding the input layer so the physical keyboard maps to the logical reader buttons: `Back / Confirm / Left / Right / Up / Down / Power`.
+- Adding and improving **keyboard mapping settings**, allowing key customization in `Settings -> Controls -> Keyboard Mapping`.
+- Adding a **Battery Status** page to inspect battery, charging, and power-related information.
+- Adapting the UI, lists, reader layout, and themes for the smaller T-Deck-Max display.
+- Preserving and adapting the original CrossPoint reading features, including **EPUB / TXT / XTC** reading, caching, progress saving, screen rotation, and status bar configuration.
 
-CrossPoint Reader aims to:
-* Provide a **fully open-source alternative** to the official firmware.
-* Offer a **document reader** capable of handling EPUB content on constrained hardware.
-* Support **customisable font, layout, and display** options.
-* Run purely on the **Xteink X4 hardware**.
+Note:
+This repository is now a **T-Deck-Max-specific build** and is no longer intended to remain compatible with the original X4 hardware.
 
-This project is **not affiliated with Xteink**; it's built as a community project.
+## 2. T-Deck-Max Hardware Overview
 
-## Features & Usage
+The current port mainly uses the following hardware:
 
-- [x] EPUB parsing and rendering (EPUB 2 and EPUB 3)
-- [x] Image support within EPUB
-- [x] Saved reading position
-- [x] File explorer with file picker
-  - [x] Basic EPUB picker from root directory
-  - [x] Support nested folders
-  - [ ] EPUB picker with cover art
-- [x] Custom sleep screen
-  - [x] Cover sleep screen
-- [x] Wifi book upload
-- [x] Wifi OTA updates
-- [x] KOReader Sync integration for cross-device reading progress
-- [x] Configurable font, layout, and display options
-  - [ ] User provided fonts
-  - [ ] Full UTF support
-- [x] Screen rotation
+T-Deck-Max upstream repository: [github](https://github.com/Xinyuan-LilyGO/T-Deck-MAX)
 
-Multi-language support: Read EPUBs in various languages, including English, Spanish, French, German, Italian, Portuguese, Russian, Ukrainian, Polish, Swedish, Norwegian, [and more](./USER_GUIDE.md#supported-languages).
+CrossPoint firmware downloads: [./firmware](./firmware/README.md)
 
-See [the user guide](./USER_GUIDE.md) for instructions on operating CrossPoint, including the
-[KOReader Sync quick setup](./USER_GUIDE.md#365-koreader-sync-quick-setup).
+![TDeckMax](./docs/TDeckMax/image1.png)
 
-For more details about the scope of the project, see the [SCOPE.md](SCOPE.md) document.
+## 3. Basic Usage
 
-## Installing
+### 3.1 Power and Home Screen
 
-### Web (latest firmware)
+- Long-press `BOOT` to power off, and long-press `PWR` to power on.
+- After boot, the device enters the `Home` screen by default.
+- From the home screen, you can access file browsing, recent books, file transfer, settings, and other features.
 
-1. Connect your Xteink X4 to your computer via USB-C and wake/unlock the device
-2. Go to https://xteink.dve.al/ and click "Flash CrossPoint firmware"
+### 3.2 Importing Books
 
-To revert back to the official firmware, you can flash the latest official firmware from https://xteink.dve.al/, or swap
-back to the other partition using the "Swap boot partition" button here https://xteink.dve.al/debug.
+There are two common ways to add books:
 
-### Web (specific firmware version)
+- Copy book files into storage and open them from `Browse Files`.
+- Upload books through the Wi-Fi file transfer page.
 
-1. Connect your Xteink X4 to your computer via USB-C
-2. Download the `firmware.bin` file from the release of your choice via the [releases page](https://github.com/crosspoint-reader/crosspoint-reader/releases)
-3. Go to https://xteink.dve.al/ and flash the firmware file using the "OTA fast flash controls" section
+The current firmware mainly targets these formats:
 
-To revert back to the official firmware, you can flash the latest official firmware from https://xteink.dve.al/, or swap
-back to the other partition using the "Swap boot partition" button here https://xteink.dve.al/debug.
+- `EPUB`
+- `TXT`
+- `XTC`
 
-### Command line (specific firmware version)
+### 3.3 Settings Entry Points
 
-1. Install [`esptool`](https://github.com/espressif/esptool) :
-```bash
-pip install esptool
-```
-2. Download the `firmware.bin` file from the release of your choice via the [releases page](https://github.com/crosspoint-reader/crosspoint-reader/releases)
-3. Connect your Xteink X4 to your computer via USB-C.
-4. Note the device location. On Linux, run `dmesg` after connecting. On MacOS, run :
-```bash
-log stream --predicate 'subsystem == "com.apple.iokit"' --info
-```
-5. Flash the firmware :
-```bash
-esptool.py --chip esp32c3 --port /dev/ttyACM0 --baud 921600 write_flash 0x10000 /path/to/firmware.bin
-```
-Change `/dev/ttyACM0` to the device for your system.
+Main settings categories:
 
-### Manual
+- `Settings -> Display`
+- `Settings -> Reader`
+- `Settings -> Controls`
+- `Settings -> System`
 
-See [Development](#development) below.
+The settings most closely related to T-Deck-Max include:
 
-## Development
+- `Settings -> Controls -> Keyboard Mapping`
+- `Settings -> Controls -> Battery Status`
+- `Settings -> Reader -> Customise Status Bar`
 
-### Prerequisites
+## 4. Default Key Mapping
 
-* **PlatformIO Core** (`pio`) or **VS Code + PlatformIO IDE**
-* Python 3.8+
-* USB-C cable for flashing the ESP32-C3
-* Xteink X4
+The current default logical key mapping is:
 
-### Checking out the code
+| Logical Function | T-Deck-Max Default Key |
+| --- | --- |
+| Back | `Del` |
+| Confirm | `Enter` |
+| Left | `A` |
+| Right | `D` |
+| Up | `W` |
+| Down | `S` |
+| Power | `BOOT` |
 
-CrossPoint uses PlatformIO for building and flashing the firmware. To get started, clone the repository:
+On most menu pages:
 
-```
-git clone --recursive https://github.com/crosspoint-reader/crosspoint-reader
+- `W` or `A`: previous / up
+- `S` or `D`: next / down
+- `Enter`: confirm / open
+- `Del`: back
 
-# Or, if you've already cloned without --recursive:
-git submodule update --init --recursive
-```
+Notes:
 
-### Flashing your device
+- By default, the reader page also uses `W / S` as page-turn logic keys.
+- If you do not like the default layout, you can rebind it in `Settings -> Controls -> Keyboard Mapping`.
 
-Connect your Xteink X4 to your computer via USB-C and run the following command.
+## 5. Reading Page Operations
 
-```sh
-pio run --target upload
-```
-### Debugging
+Operations differ slightly depending on the document format.
 
-After flashing the new features, it’s recommended to capture detailed logs from the serial port.
+### 5.1 EPUB Reader Page
 
-First, make sure all required Python packages are installed:
+Basic operations:
 
-```python
-python3 -m pip install pyserial colorama matplotlib
-```
-after that run the script:
-```sh
-# For Linux
-# This was tested on Debian and should work on most Linux systems.
-python3 scripts/debugging_monitor.py
+- `A`: previous page
+- `D`: next page
+- `W`: previous page
+- `S`: next page
+- Short press `Del`: return to the home screen
+- Long press `Del` for about 1 second: return to the file browser
+- Press `Enter`: open the reader menu
 
-# For macOS
-python3 scripts/debugging_monitor.py /dev/cu.usbmodem2101
-```
-Minor adjustments may be required for Windows.
+If `Settings -> Controls -> Long Press Skip` is enabled:
 
-## Internals
+- Hold a page-turn key and release it to jump directly to the previous or next chapter
 
-CrossPoint Reader is pretty aggressive about caching data down to the SD card to minimise RAM usage. The ESP32-C3 only
-has ~380KB of usable RAM, so we have to be careful. A lot of the decisions made in the design of the firmware were based
-on this constraint.
+The EPUB reader menu includes:
 
-### Data caching
+- Chapter selection
+- Footnotes list
+- Go to percentage
+- Auto page turn
+- Screen orientation switching
+- Screenshot
+- Display current page text as a QR code
+- Return home
+- KOReader Sync progress sync
+- Delete this book's cache
 
-The first time chapters of a book are loaded, they are cached to the SD card. Subsequent loads are served from the 
-cache. This cache directory exists at `.crosspoint` on the SD card. The structure is as follows:
+Additional notes:
 
+- If the current page comes from a footnote jump, short-pressing `Del` first returns to the original reading position.
+- The global screenshot shortcut is `BOOT + S`.
 
-```
-.crosspoint/
-├── epub_12471232/       # Each EPUB is cached to a subdirectory named `epub_<hash>`
-│   ├── progress.bin     # Stores reading progress (chapter, page, etc.)
-│   ├── cover.bmp        # Book cover image (once generated)
-│   ├── book.bin         # Book metadata (title, author, spine, table of contents, etc.)
-│   └── sections/        # All chapter data is stored in the sections subdirectory
-│       ├── 0.bin        # Chapter data (screen count, all text layout info, etc.)
-│       ├── 1.bin        #     files are named by their index in the spine
-│       └── ...
-│
-└── epub_189013891/
-```
+### 5.2 TXT Reader Page
 
-Deleting the `.crosspoint` directory will clear the entire cache. 
+Basic operations:
 
-Due the way it's currently implemented, the cache is not automatically cleared when a book is deleted and moving a book
-file will use a new cache directory, resetting the reading progress.
+- `A`: previous page
+- `D`: next page
+- `W`: previous page
+- `S`: next page
+- Short press `Del`: return to the home screen
+- Long press `Del` for about 1 second: return to the file browser
 
-For more details on the internal file structures, see the [file formats document](./docs/file-formats.md).
+The TXT reader is currently focused on sequential plain-text reading and does not provide the full EPUB-style menu flow.
 
-## Contributing
+### 5.3 XTC Reader Page
 
-Contributions are very welcome!
+Basic operations:
 
-If you are new to the codebase, start with the [contributing docs](./docs/contributing/README.md).
+- `A`: previous page
+- `D`: next page
+- `W`: previous page
+- `S`: next page
+- Short press `Del`: return to the home screen
+- Long press `Del` for about 1 second: return to the file browser
+- Press `Enter`: open chapter selection
 
-If you're looking for a way to help out, take a look at the [ideas discussion board](https://github.com/crosspoint-reader/crosspoint-reader/discussions/categories/ideas).
-If there's something there you'd like to work on, leave a comment so that we can avoid duplicated effort.
+If `Settings -> Controls -> Long Press Skip` is enabled:
 
-Everyone here is a volunteer, so please be respectful and patient. For more details on our governance and community 
-principles, please see [GOVERNANCE.md](GOVERNANCE.md).
+- Long-holding a page-turn key can move by a larger step size
 
-### To submit a contribution:
+### 5.4 Power-Key Related Behavior
 
-1. Fork the repo
-2. Create a branch (`feature/dithering-improvement`)
-3. Make changes
-4. Submit a PR
+The `BOOT` key is both the hardware power key and the logical `Power` key.
+
+- Long press can power the device off
+- In system settings, short-press power behavior can be configured as:
+  - Ignore
+  - Page turn in reader
+  - Force refresh
+
+## 6. Usage Tips
+
+- The first time you open a large EPUB, the system builds cache files. This is expected.
+- If reading layout or pagination looks wrong, try deleting the reading cache and reopening the book.
+- If you want to customize the control experience, start with:
+  - `Keyboard Mapping`
+  - `Short Power Button`
+  - `Long Press Skip`
+  - `Customise Status Bar`
 
 ---
 
-CrossPoint Reader is **not affiliated with Xteink or any manufacturer of the X4 hardware**.
-
-Huge shoutout to [**diy-esp32-epub-reader** by atomic14](https://github.com/atomic14/diy-esp32-epub-reader), which was a project I took a lot of inspiration from as I
-was making CrossPoint.
