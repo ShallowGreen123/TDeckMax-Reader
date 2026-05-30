@@ -182,12 +182,12 @@ class CrossPointSettings {
   uint8_t sleepScreenCoverFilter = NO_FILTER;
   // Status bar settings (statusBar retained for migration only)
   uint8_t statusBar = FULL;
-  uint8_t statusBarChapterPageCount = 1;
-  uint8_t statusBarBookProgressPercentage = 1;
-  uint8_t statusBarProgressBar = HIDE_PROGRESS;
-  uint8_t statusBarProgressBarThickness = PROGRESS_BAR_NORMAL;
-  uint8_t statusBarTitle = CHAPTER_TITLE;
-  uint8_t statusBarBattery = 1;
+  uint8_t statusBarChapterPageCount = 0;
+  uint8_t statusBarBookProgressPercentage = 0;
+  uint8_t statusBarProgressBar = CHAPTER_PROGRESS;
+  uint8_t statusBarProgressBarThickness = PROGRESS_BAR_THIN;
+  uint8_t statusBarTitle = HIDE_TITLE;
+  uint8_t statusBarBattery = 0;
   // Text rendering settings
   uint8_t extraParagraphSpacing = 1;
   uint8_t textAntiAliasing = 1;
