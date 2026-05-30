@@ -23,6 +23,9 @@ constexpr uint8_t KEYPAD_COLS = 10;
 constexpr uint8_t KEYBOARD_RESET_PULSE_MS = 20;
 constexpr uint8_t TOUCH_RESET_PULSE_MS = 20;
 constexpr uint8_t TOUCH_RESET_SETTLE_MS = 60;
+constexpr uint8_t KEYBOARD_FIFO_DEPTH = 10;
+constexpr unsigned long KEYBOARD_STUCK_PRESS_MS = 5000;
+constexpr unsigned long KEYBOARD_RECOVERY_COOLDOWN_MS = 250;
 
 Adafruit_TCA8418 keypad;
 IoExpanderXL9555 xl9555;
@@ -32,6 +35,8 @@ bool xl9555Ready = false;
 bool keypadReady = false;
 bool touchReady = false;
 bool chargerReady = false;
+unsigned long lastKeyboardEventMs = 0;
+unsigned long lastKeyboardRecoveryMs = 0;
 
 enum RawBindableKey : uint8_t {
   RAW_KEY_BOOT = 0,
@@ -172,6 +177,12 @@ void initKeyboard() {
     return;
   }
   keypad.matrix(KEYPAD_ROWS, KEYPAD_COLS);
+  keypad.enableDebounce();
+  keypad.enableMatrixOverflow();
+  keypad.enableInterrupts();
+  uint8_t cfg = keypad.readRegister(TCA8418_REG_CFG);
+  cfg |= TCA8418_REG_CFG_OVR_FLOW_IEN;
+  keypad.writeRegister(TCA8418_REG_CFG, cfg);
   keypad.flush();
 }
 
@@ -306,6 +317,8 @@ void HalGPIO::begin() {
   initTouch();
   initKeyboard();
   initCharger();
+  lastKeyboardEventMs = millis();
+  lastKeyboardRecoveryMs = 0;
 
   lastUsbConnected = isUsbConnected();
 }
@@ -358,18 +371,94 @@ void HalGPIO::update() {
     }
   };
 
-  if (keypadReady) {
-    while (keypad.available() > 0) {
-      uint8_t rawKey = RAW_KEY_COUNT;
-      uint8_t button = BUTTON_COUNT;
-      bool pressed = false;
-      if (!decodeKeypadEvent(keypad.getEvent(), rawKey, button, pressed)) {
-        continue;
+  auto clearKeyboardInterrupts = []() {
+    const uint8_t intStatus = keypad.readRegister(TCA8418_REG_INT_STAT);
+    if (intStatus != 0) {
+      // TCA8418 clears interrupt status bits on write-1.
+      keypad.writeRegister(TCA8418_REG_INT_STAT, intStatus);
+    }
+  };
+
+  auto releaseAllTrackedKeys = [this, &nextState, &nextRawState]() {
+    for (uint8_t i = 0; i < RAW_BINDABLE_KEY_COUNT; i++) {
+      if (nextRawState[i]) {
+        nextRawState[i] = false;
+        rawKeyReleasedEdge[i] = true;
+        rawKeyPressedSince[i] = 0;
+        anyReleased = true;
       }
-      // Apply each queued keypad event immediately so a quick tap that
-      // completes between two update() calls still preserves its edges.
-      applyRawKeyState(rawKey, pressed);
-      applyButtonState(button, pressed);
+    }
+
+    for (uint8_t i = 0; i < BUTTON_COUNT; i++) {
+      if (nextState[i]) {
+        nextState[i] = false;
+        buttonReleasedEdge[i] = true;
+        buttonPressedSince[i] = 0;
+        anyReleased = true;
+      }
+    }
+  };
+
+  auto recoverKeyboard = [&, this](const char* reason) {
+    if ((now - lastKeyboardRecoveryMs) < KEYBOARD_RECOVERY_COOLDOWN_MS) {
+      return;
+    }
+
+    LOG_ERR("GPIO", "Recovering keyboard controller: %s", reason);
+    releaseAllTrackedKeys();
+    if (keypadReady) {
+      clearKeyboardInterrupts();
+    }
+    initKeyboard();
+    lastKeyboardEventMs = now;
+    lastKeyboardRecoveryMs = now;
+  };
+
+  if (keypadReady) {
+    uint8_t intStatus = keypad.readRegister(TCA8418_REG_INT_STAT);
+    uint8_t eventCount = keypad.available();
+    if (eventCount > KEYBOARD_FIFO_DEPTH || (intStatus & TCA8418_REG_STAT_OVR_FLOW_INT)) {
+      recoverKeyboard("TCA8418 FIFO overflow");
+    } else {
+      uint8_t processedEvents = 0;
+      while (eventCount > 0 && processedEvents < KEYBOARD_FIFO_DEPTH) {
+        processedEvents++;
+        uint8_t rawKey = RAW_KEY_COUNT;
+        uint8_t button = BUTTON_COUNT;
+        bool pressed = false;
+        if (!decodeKeypadEvent(keypad.getEvent(), rawKey, button, pressed)) {
+          eventCount = keypad.available();
+          continue;
+        }
+        // Apply each queued keypad event immediately so a quick tap that
+        // completes between two update() calls still preserves its edges.
+        applyRawKeyState(rawKey, pressed);
+        applyButtonState(button, pressed);
+        lastKeyboardEventMs = now;
+        eventCount = keypad.available();
+      }
+
+      if (eventCount > 0) {
+        recoverKeyboard("TCA8418 FIFO drain did not converge");
+      } else {
+        clearKeyboardInterrupts();
+
+        const bool keyboardIrqAsserted = digitalRead(BOARD_KEYBOARD_INT) == LOW;
+        bool hasPressedKeyboardKey = false;
+        for (uint8_t rawKey = RAW_KEY_A; rawKey < RAW_KEY_COUNT; rawKey++) {
+          if (nextRawState[rawKey]) {
+            hasPressedKeyboardKey = true;
+            break;
+          }
+        }
+
+        if (keyboardIrqAsserted && keypad.available() == 0) {
+          recoverKeyboard("keyboard INT stuck low without queued events");
+        } else if (hasPressedKeyboardKey && keypad.available() == 0 && !keyboardIrqAsserted &&
+                   (now - lastKeyboardEventMs) > KEYBOARD_STUCK_PRESS_MS) {
+          recoverKeyboard("stuck pressed key state");
+        }
+      }
     }
   }
 
