@@ -1,6 +1,6 @@
 # T-Deck-Max CrossPoint Port
 
-`English` | [中文](./READMD_CN.md)
+`English` | [中文](./README_CN.md)
 
 ## 1. Thanks and Project Changes
 
