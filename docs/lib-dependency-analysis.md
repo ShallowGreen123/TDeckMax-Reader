@@ -2,7 +2,7 @@
 
 **文档版本**：1.0  
 **编制日期**：2026年4月29日  
-**分析范围**：lib/ 目录及 open-x4-sdk/ 子模块  
+**分析范围**：lib/ 目录；文中部分条目保留了已移除旧硬件 SDK 的历史分析  
 
 ---
 
@@ -40,10 +40,10 @@
 
 ### 2.1 EInkDisplay
 
-**类型**：Git Submodule（open-x4-sdk 子模块）  
+**类型**：旧外部依赖（已移除）  
 **仓库地址**：https://github.com/open-x4-epaper/community-sdk  
 **当前版本**：1.0.0  
-**引用路径**：open-x4-sdk/libs/display/EInkDisplay/library.json:1
+**引用路径**：历史路径，目录已移除
 
 #### 核心能力摘要
 
@@ -716,7 +716,7 @@ ZIP压缩包读取库，核心用于EPUB文件解析。功能：ZIP目录读取�
 
 ---
 
-## 3 open-x4-sdk 子模块详细分析
+## 3 已移除旧硬件 SDK 的历史分析
 
 **类型**：Git Submodule  
 **仓库地址**：https://github.com/open-x4-epaper/community-sdk  
@@ -726,7 +726,7 @@ ZIP压缩包读取库，核心用于EPUB文件解析。功能：ZIP目录读取�
 
 **版本**：1.0.0  
 **作者**：Serge Baranov (CrazyCoder)  
-**引用路径**：open-x4-sdk/libs/hardware/BatteryMonitor/library.json:1
+**引用路径**：历史路径，目录已移除
 
 电池电量监控库，通过 I2C 与 TI BQ27220 燃料电池计通信，获取电池电压、百分比和电流信息。hal 层通过 HalPowerManager 间接使用。
 
@@ -734,7 +734,7 @@ ZIP压缩包读取库，核心用于EPUB文件解析。功能：ZIP目录读取�
 
 **版本**：1.1.0  
 **作者**：CidVonHighwind  
-**引用路径**：open-x4-sdk/libs/hardware/InputManager/library.json:1
+**引用路径**：历史路径，目录已移除
 
 按钮输入管理库，处理正面按钮（Back/Confirm/Left/Right）和侧面按钮（Up/Down/Power）的 GPIO 中断和状态检测。hal 层通过 HalGPIO 间接使用。
 
@@ -742,7 +742,7 @@ ZIP压缩包读取库，核心用于EPUB文件解析。功能：ZIP目录读取�
 
 **版本**：2.0.0  
 **作者**：CidVonHighwind、Dave Allie  
-**引用路径**：open-x4-sdk/libs/hardware/SDCardManager/library.json:1
+**引用路径**：历史路径，目录已移除
 
 SD卡文件系统封装库，基于 SdFat 库。hal 层通过 HalStorage 间接使用。
 

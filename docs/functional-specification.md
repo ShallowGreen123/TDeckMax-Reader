@@ -671,10 +671,6 @@ crosspoint-reader/
 │   ├── OpdsParser/               # OPDS 解析库
 │   ├── I18n/                      # 国际化库
 │   └── [其他库]
-├── open-x4-sdk/                  # 硬件 SDK
-│   └── libs/
-│       ├── display/              # 显示驱动
-│       └── hardware/             # 硬件驱动
 ├── docs/                         # 文档
 ├── scripts/                      # 构建脚本
 ├── test/                         # 测试代码
