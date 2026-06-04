@@ -26,6 +26,9 @@ constexpr uint8_t TOUCH_RESET_SETTLE_MS = 60;
 constexpr uint8_t KEYBOARD_FIFO_DEPTH = 10;
 constexpr unsigned long KEYBOARD_STUCK_PRESS_MS = 5000;
 constexpr unsigned long KEYBOARD_RECOVERY_COOLDOWN_MS = 250;
+constexpr uint8_t SCREEN_BACKLIGHT_DEFAULT_LEVEL = 0;
+constexpr uint8_t SCREEN_BACKLIGHT_MAX_LEVEL = 10;
+constexpr uint16_t SCREEN_BACKLIGHT_PWM_MAX = 255;
 
 Adafruit_TCA8418 keypad;
 IoExpanderXL9555 xl9555;
@@ -303,7 +306,7 @@ bool decodeKeypadEvent(const int event, uint8_t& outRawKey, uint8_t& outButton, 
 void HalGPIO::begin() {
   pinMode(BOARD_BOOT_PIN, INPUT_PULLUP);
   pinMode(BOARD_EPD_BL, OUTPUT);
-  analogWrite(BOARD_EPD_BL, 0);
+  setScreenBacklightLevel(SCREEN_BACKLIGHT_DEFAULT_LEVEL);
   pinMode(BOARD_KEYBOARD_LED, OUTPUT);
   analogWrite(BOARD_KEYBOARD_LED, 0);
 
@@ -321,6 +324,14 @@ void HalGPIO::begin() {
   lastKeyboardRecoveryMs = 0;
 
   lastUsbConnected = isUsbConnected();
+}
+
+void HalGPIO::setScreenBacklightLevel(uint8_t level) {
+  const uint8_t clampedLevel = std::min(level, SCREEN_BACKLIGHT_MAX_LEVEL);
+  const uint16_t scaledPwm =
+      (static_cast<uint16_t>(clampedLevel) * SCREEN_BACKLIGHT_PWM_MAX + (SCREEN_BACKLIGHT_MAX_LEVEL / 2)) /
+      SCREEN_BACKLIGHT_MAX_LEVEL;
+  analogWrite(BOARD_EPD_BL, static_cast<uint8_t>(scaledPwm));
 }
 
 void HalGPIO::update() {

@@ -133,6 +133,10 @@ The Settings screen allows you to configure the device's behavior. There are a f
   - "None" (default) - The cover image will be converted to a grayscale image and displayed as it is
   - "Contrast" - The image will be displayed as a black & white image without grayscale conversion
   - "Inverted" - The image will be inverted as in white & black and will be displayed without grayscale conversion
+- **Screen Backlight**: Adjust the screen frontlight from 0 to 10:
+  - "0" (default) - Turn the backlight off
+  - "2" - Enable the backlight at a low brightness level
+  - "10" - Maximum backlight brightness
 - **Status Bar**: Configure the status bar displayed while reading:
   - "None" - No status bar
   - "No Progress" - Show status bar without reading progress

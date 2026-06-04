@@ -284,6 +284,7 @@ void setup() {
   HalSystem::checkPanic();
 
   SETTINGS.loadFromFile();
+  gpio.setScreenBacklightLevel(SETTINGS.screenBacklightLevel);
   I18N.loadSettings();
   KOREADER_STORE.loadFromFile();
   OPDS_STORE.loadFromFile();

@@ -3,6 +3,7 @@
 #include <ArduinoJson.h>
 #include <Epub.h>
 #include <FsHelpers.h>
+#include <HalGPIO.h>
 #include <HalStorage.h>
 #include <Logging.h>
 #include <WiFi.h>
@@ -1191,6 +1192,7 @@ void CrossPointWebServer::handlePostSettings() {
 
   const auto& settings = getSettingsList();
   int applied = 0;
+  bool applyScreenBacklight = false;
 
   for (const auto& s : settings) {
     if (!s.key) continue;
@@ -1222,6 +1224,9 @@ void CrossPointWebServer::handlePostSettings() {
         if (val >= s.valueRange.min && val <= s.valueRange.max) {
           if (s.valuePtr) {
             SETTINGS.*(s.valuePtr) = static_cast<uint8_t>(val);
+            if (s.valuePtr == &CrossPointSettings::screenBacklightLevel) {
+              applyScreenBacklight = true;
+            }
           }
           applied++;
         }
@@ -1244,6 +1249,9 @@ void CrossPointWebServer::handlePostSettings() {
     }
   }
 
+  if (applyScreenBacklight) {
+    gpio.setScreenBacklightLevel(SETTINGS.screenBacklightLevel);
+  }
   SETTINGS.saveToFile();
 
   LOG_DBG("WEB", "Applied %d setting(s)", applied);

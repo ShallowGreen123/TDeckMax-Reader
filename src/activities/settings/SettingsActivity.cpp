@@ -2,6 +2,7 @@
 
 #include "BatteryStatusActivity.h"
 #include <GfxRenderer.h>
+#include <HalGPIO.h>
 #include <Logging.h>
 
 #include "ClearCacheActivity.h"
@@ -180,6 +181,9 @@ void SettingsActivity::toggleCurrentSetting() {
       SETTINGS.*(setting.valuePtr) = setting.valueRange.min;
     } else {
       SETTINGS.*(setting.valuePtr) = currentValue + setting.valueRange.step;
+    }
+    if (setting.valuePtr == &CrossPointSettings::screenBacklightLevel) {
+      gpio.setScreenBacklightLevel(SETTINGS.screenBacklightLevel);
     }
   } else if (setting.type == SettingType::ACTION) {
     auto resultHandler = [this](const ActivityResult&) { SETTINGS.saveToFile(); };

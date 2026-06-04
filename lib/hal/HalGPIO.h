@@ -27,6 +27,7 @@ class HalGPIO {
   HalGPIO() = default;
 
   void begin();
+  void setScreenBacklightLevel(uint8_t level);
 
   void update();
   bool isPressed(uint8_t buttonIndex) const;
