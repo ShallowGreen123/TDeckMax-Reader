@@ -54,7 +54,8 @@ void KOReaderSettingsActivity::handleSelection() {
   if (selectedIndex == 0) {
     // Username
     startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_KOREADER_USERNAME),
-                                                                   KOREADER_STORE.getUsername(), 64, InputType::Text),
+                                                                   KOREADER_STORE.getUsername(), 64, InputType::Text,
+                                                                   true),
                            [this](const ActivityResult& result) {
                              if (!result.isCancelled) {
                                const auto& kb = std::get<KeyboardResult>(result.data);
@@ -66,7 +67,7 @@ void KOReaderSettingsActivity::handleSelection() {
     // Password
     startActivityForResult(
         std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_KOREADER_PASSWORD),
-                                                KOREADER_STORE.getPassword(), 64, InputType::Password),
+                                                KOREADER_STORE.getPassword(), 64, InputType::Password, true),
         [this](const ActivityResult& result) {
           if (!result.isCancelled) {
             const auto& kb = std::get<KeyboardResult>(result.data);

@@ -141,7 +141,7 @@ void OpdsSettingsActivity::handleSelection() {
       }
     };
     startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_USERNAME),
-                                                                   editServer.username, 63, InputType::Text),
+                                                                   editServer.username, 63, InputType::Text, true),
                            handler);
   } else if (selectedIndex == 3) {
     // Password
@@ -154,7 +154,7 @@ void OpdsSettingsActivity::handleSelection() {
       }
     };
     startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_PASSWORD),
-                                                                   editServer.password, 63, InputType::Password),
+                                                                   editServer.password, 63, InputType::Password, true),
                            handler);
   } else if (selectedIndex == 4 && !isNewServer) {
     // Delete flow is only available for existing servers.
