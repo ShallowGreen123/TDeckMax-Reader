@@ -22,12 +22,14 @@ class KeyboardEntryActivity : public Activity {
  public:
   explicit KeyboardEntryActivity(GfxRenderer& renderer, MappedInputManager& mappedInput,
                                  std::string title = "Enter Text", std::string initialText = "",
-                                 const size_t maxLength = 0, InputType inputType = InputType::Text)
+                                 const size_t maxLength = 0, InputType inputType = InputType::Text,
+                                 const bool usePhysicalKeyboard = false)
       : Activity("KeyboardEntry", renderer, mappedInput),
         title(std::move(title)),
         text(std::move(initialText)),
         maxLength(maxLength),
-        inputType(inputType) {}
+        inputType(inputType),
+        physicalKeyboardMode(usePhysicalKeyboard) {}
 
   void onEnter() override;
   void onExit() override;
@@ -70,6 +72,12 @@ class KeyboardEntryActivity : public Activity {
   int delPressCount = 0;
   bool hintVisible = false;
   unsigned long hintShowTime = 0;
+  bool physicalKeyboardMode = false;
+  bool physicalUppercase = false;
+  bool physicalDelHeld = false;
+  bool physicalDelLongHandled = false;
+  bool physicalSymHeld = false;
+  bool physicalSymLongHandled = false;
 
   void onComplete(std::string text);
   void onCancel();
@@ -223,4 +231,9 @@ class KeyboardEntryActivity : public Activity {
   bool insertChar(char c);
   void insertString(const std::string& str);
   void mapColContentBottom(int& col, bool goingUp) const;
+  void loopPhysicalKeyboard();
+  bool isPhysicalSymbolHeld() const;
+  char getPhysicalLowerChar(HalGPIO::KeypadKey key) const;
+  char getPhysicalUpperChar(HalGPIO::KeypadKey key) const;
+  char getPhysicalSymbolChar(HalGPIO::KeypadKey key) const;
 };

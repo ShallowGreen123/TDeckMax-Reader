@@ -1,5 +1,6 @@
 #include "WifiSelectionActivity.h"
 
+#include <algorithm>
 #include <GfxRenderer.h>
 #include <I18n.h>
 #include <Logging.h>
@@ -91,36 +92,57 @@ void WifiSelectionActivity::startWifiScan() {
   autoConnecting = false;
   state = WifiSelectionState::SCANNING;
   networks.clear();
+  selectedNetworkIndex = 0;
+  requestUpdateAndWait();
+
+  bool scanCompleted = false;
+  for (uint8_t attempt = 0; attempt <= WIFI_SCAN_MAX_RETRIES; ++attempt) {
+    LOG_DBG("WIFI", "Starting WiFi scan attempt %u/%u", attempt + 1, WIFI_SCAN_MAX_RETRIES + 1);
+
+    if (performWifiScanAttempt()) {
+      scanCompleted = true;
+      break;
+    }
+
+    if (attempt < WIFI_SCAN_MAX_RETRIES) {
+      delay(WIFI_SCAN_RETRY_DELAY_MS);
+    }
+  }
+
+  if (!scanCompleted) {
+    LOG_ERR("WIFI", "WiFi scan failed after %u attempts", WIFI_SCAN_MAX_RETRIES + 1);
+  }
+
+  state = WifiSelectionState::NETWORK_LIST;
+  selectedNetworkIndex = 0;
   requestUpdate();
-
-  // Set WiFi mode to station
-  WiFi.mode(WIFI_STA);
-  WiFi.disconnect();
-  delay(100);
-
-  // Start async scan
-  WiFi.scanNetworks(true);  // true = async scan
 }
 
-void WifiSelectionActivity::processWifiScanResults() {
-  const int16_t scanResult = WiFi.scanComplete();
+bool WifiSelectionActivity::performWifiScanAttempt() {
+  WiFi.scanDelete();
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(false);
+  WiFi.setSleep(false);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect(false, true);
+  delay(WIFI_SCAN_RADIO_SETTLE_MS);
 
-  if (scanResult == WIFI_SCAN_RUNNING) {
-    // Scan still in progress
-    return;
+  const int16_t scanResult = WiFi.scanNetworks(false, false, false, WIFI_SCAN_MAX_MS_PER_CHANNEL, 0, nullptr, nullptr);
+  if (scanResult < 0) {
+    LOG_ERR("WIFI", "WiFi scan failed (result=%d, mode=%d, status=%d)",
+            scanResult,
+            static_cast<int>(WiFi.getMode()),
+            static_cast<int>(WiFi.status()));
+    WiFi.scanDelete();
+    return false;
   }
 
-  if (scanResult == WIFI_SCAN_FAILED) {
-    state = WifiSelectionState::NETWORK_LIST;
-    requestUpdate();
-    return;
-  }
+  LOG_DBG("WIFI", "WiFi scan completed with %d APs", scanResult);
 
-  // Scan complete, process results
-  // Use a map to deduplicate networks by SSID, keeping the strongest signal
+  // Use a map to deduplicate networks by SSID, keeping the strongest signal.
   std::map<std::string, WifiNetworkInfo> uniqueNetworks;
 
-  for (int i = 0; i < scanResult; i++) {
+  for (int i = 0; i < scanResult; ++i) {
     std::string ssid = WiFi.SSID(i).c_str();
     const int32_t rssi = WiFi.RSSI(i);
 
@@ -157,10 +179,12 @@ void WifiSelectionActivity::processWifiScanResults() {
     return a.rssi > b.rssi;
   });
 
+  if (networks.empty()) {
+    LOG_DBG("WIFI", "WiFi scan completed successfully but found no visible networks");
+  }
+
   WiFi.scanDelete();
-  state = WifiSelectionState::NETWORK_LIST;
-  selectedNetworkIndex = 0;
-  requestUpdate();
+  return true;
 }
 
 void WifiSelectionActivity::selectNetwork(const int index) {
@@ -193,7 +217,8 @@ void WifiSelectionActivity::selectNetwork(const int index) {
     startActivityForResult(std::make_unique<KeyboardEntryActivity>(renderer, mappedInput, tr(STR_ENTER_WIFI_PASSWORD),
                                                                    "",  // No initial text
                                                                    64,  // Max password length
-                                                                   InputType::Password),
+                                                                   InputType::Password,
+                                                                   true),
                            [this](const ActivityResult& result) {
                              if (result.isCancelled) {
                                state = WifiSelectionState::NETWORK_LIST;
@@ -292,9 +317,7 @@ void WifiSelectionActivity::checkConnectionStatus() {
 }
 
 void WifiSelectionActivity::loop() {
-  // Check scan progress
   if (state == WifiSelectionState::SCANNING) {
-    processWifiScanResults();
     return;
   }
 

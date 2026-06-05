@@ -18,6 +18,7 @@ namespace {
 constexpr char KEYPAD_KEY_NONE = '\0';
 constexpr char KEYPAD_KEY_DEL = '\b';
 constexpr char KEYPAD_KEY_ENT = 'E';
+constexpr uint8_t INVALID_KEYPAD_KEY = 0xFF;
 constexpr uint8_t KEYPAD_ROWS = 4;
 constexpr uint8_t KEYPAD_COLS = 10;
 constexpr uint8_t KEYBOARD_RESET_PULSE_MS = 20;
@@ -83,6 +84,18 @@ const char keymap[KEYPAD_ROWS][KEYPAD_COLS] = {
     {'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', KEYPAD_KEY_DEL},
     {'2', 'z', 'x', 'c', 'v', 'b', 'n', 'm', '$', KEYPAD_KEY_ENT},
     {KEYPAD_KEY_NONE, KEYPAD_KEY_NONE, KEYPAD_KEY_NONE, KEYPAD_KEY_NONE, KEYPAD_KEY_NONE, 'U', '0', ' ', 'S', 'U'},
+};
+
+const uint8_t keypadPhysicalMap[KEYPAD_ROWS][KEYPAD_COLS] = {
+    {HalGPIO::KEYPAD_Q, HalGPIO::KEYPAD_W, HalGPIO::KEYPAD_E, HalGPIO::KEYPAD_R, HalGPIO::KEYPAD_T,
+     HalGPIO::KEYPAD_Y, HalGPIO::KEYPAD_U, HalGPIO::KEYPAD_I, HalGPIO::KEYPAD_O, HalGPIO::KEYPAD_P},
+    {HalGPIO::KEYPAD_A, HalGPIO::KEYPAD_S, HalGPIO::KEYPAD_D, HalGPIO::KEYPAD_F, HalGPIO::KEYPAD_G,
+     HalGPIO::KEYPAD_H, HalGPIO::KEYPAD_J, HalGPIO::KEYPAD_K, HalGPIO::KEYPAD_L, HalGPIO::KEYPAD_DEL},
+    {HalGPIO::KEYPAD_ALT, HalGPIO::KEYPAD_Z, HalGPIO::KEYPAD_X, HalGPIO::KEYPAD_C, HalGPIO::KEYPAD_V,
+     HalGPIO::KEYPAD_B, HalGPIO::KEYPAD_N, HalGPIO::KEYPAD_M, HalGPIO::KEYPAD_DOLLAR, HalGPIO::KEYPAD_ENT},
+    {INVALID_KEYPAD_KEY,        INVALID_KEYPAD_KEY,       INVALID_KEYPAD_KEY, INVALID_KEYPAD_KEY,
+     INVALID_KEYPAD_KEY,        HalGPIO::KEYPAD_SHIFT_LEFT, HalGPIO::KEYPAD_MIC, HalGPIO::KEYPAD_SPACE,
+     HalGPIO::KEYPAD_SYM, HalGPIO::KEYPAD_SHIFT_RIGHT},
 };
 
 void deselectSharedSpiDevices() {
@@ -284,7 +297,8 @@ uint8_t mapRawBindableKeyToButton(const uint8_t rawKey) {
   }
 }
 
-bool decodeKeypadEvent(const int event, uint8_t& outRawKey, uint8_t& outButton, bool& outPressed) {
+bool decodeKeypadEvent(const int event, uint8_t& outKeypadKey, uint8_t& outRawKey, uint8_t& outButton,
+                       bool& outPressed) {
   if ((event & 0x7F) == 0) {
     return false;
   }
@@ -297,9 +311,10 @@ bool decodeKeypadEvent(const int event, uint8_t& outRawKey, uint8_t& outButton, 
   }
 
   outPressed = (event & 0x80) != 0;
+  outKeypadKey = keypadPhysicalMap[row][col];
   outRawKey = mapKeyToRawBindableKey(keymap[row][col]);
   outButton = mapRawBindableKeyToButton(outRawKey);
-  return outRawKey < HalGPIO::RAW_BINDABLE_KEY_COUNT;
+  return outKeypadKey < HalGPIO::KEYPAD_KEY_COUNT;
 }
 }  // namespace
 
@@ -337,17 +352,37 @@ void HalGPIO::setScreenBacklightLevel(uint8_t level) {
 void HalGPIO::update() {
   bool nextState[BUTTON_COUNT];
   bool nextRawState[RAW_BINDABLE_KEY_COUNT];
+  bool nextKeypadState[KEYPAD_KEY_COUNT];
   std::copy(std::begin(buttonState), std::end(buttonState), std::begin(nextState));
   std::copy(std::begin(rawKeyState), std::end(rawKeyState), std::begin(nextRawState));
+  std::copy(std::begin(keypadKeyState), std::end(keypadKeyState), std::begin(nextKeypadState));
 
   std::fill(std::begin(buttonPressedEdge), std::end(buttonPressedEdge), false);
   std::fill(std::begin(buttonReleasedEdge), std::end(buttonReleasedEdge), false);
   std::fill(std::begin(rawKeyPressedEdge), std::end(rawKeyPressedEdge), false);
   std::fill(std::begin(rawKeyReleasedEdge), std::end(rawKeyReleasedEdge), false);
+  std::fill(std::begin(keypadKeyPressedEdge), std::end(keypadKeyPressedEdge), false);
+  std::fill(std::begin(keypadKeyReleasedEdge), std::end(keypadKeyReleasedEdge), false);
   anyPressed = false;
   anyReleased = false;
   lastPressedBindableKey = -1;
   const unsigned long now = millis();
+
+  auto applyKeypadState = [this, &nextKeypadState, now](const uint8_t key, const bool pressed) {
+    if (key >= KEYPAD_KEY_COUNT || nextKeypadState[key] == pressed) {
+      return;
+    }
+
+    nextKeypadState[key] = pressed;
+    if (pressed) {
+      keypadKeyPressedEdge[key] = true;
+      keypadKeyPressedSince[key] = now;
+      anyPressed = true;
+    } else {
+      keypadKeyReleasedEdge[key] = true;
+      anyReleased = true;
+    }
+  };
 
   auto applyRawKeyState = [this, &nextRawState, now](const uint8_t rawKey, const bool pressed) {
     if (rawKey >= RAW_BINDABLE_KEY_COUNT || nextRawState[rawKey] == pressed) {
@@ -390,7 +425,16 @@ void HalGPIO::update() {
     }
   };
 
-  auto releaseAllTrackedKeys = [this, &nextState, &nextRawState]() {
+  auto releaseAllTrackedKeys = [this, &nextState, &nextRawState, &nextKeypadState]() {
+    for (uint8_t i = 0; i < KEYPAD_KEY_COUNT; i++) {
+      if (nextKeypadState[i]) {
+        nextKeypadState[i] = false;
+        keypadKeyReleasedEdge[i] = true;
+        keypadKeyPressedSince[i] = 0;
+        anyReleased = true;
+      }
+    }
+
     for (uint8_t i = 0; i < RAW_BINDABLE_KEY_COUNT; i++) {
       if (nextRawState[i]) {
         nextRawState[i] = false;
@@ -434,13 +478,15 @@ void HalGPIO::update() {
       uint8_t processedEvents = 0;
       while (eventCount > 0 && processedEvents < KEYBOARD_FIFO_DEPTH) {
         processedEvents++;
+        uint8_t keypadKey = INVALID_KEYPAD_KEY;
         uint8_t rawKey = RAW_KEY_COUNT;
         uint8_t button = BUTTON_COUNT;
         bool pressed = false;
-        if (!decodeKeypadEvent(keypad.getEvent(), rawKey, button, pressed)) {
+        if (!decodeKeypadEvent(keypad.getEvent(), keypadKey, rawKey, button, pressed)) {
           eventCount = keypad.available();
           continue;
         }
+        applyKeypadState(keypadKey, pressed);
         // Apply each queued keypad event immediately so a quick tap that
         // completes between two update() calls still preserves its edges.
         applyRawKeyState(rawKey, pressed);
@@ -456,8 +502,8 @@ void HalGPIO::update() {
 
         const bool keyboardIrqAsserted = digitalRead(BOARD_KEYBOARD_INT) == LOW;
         bool hasPressedKeyboardKey = false;
-        for (uint8_t rawKey = RAW_KEY_A; rawKey < RAW_KEY_COUNT; rawKey++) {
-          if (nextRawState[rawKey]) {
+        for (uint8_t key = 0; key < KEYPAD_KEY_COUNT; key++) {
+          if (nextKeypadState[key]) {
             hasPressedKeyboardKey = true;
             break;
           }
@@ -478,6 +524,10 @@ void HalGPIO::update() {
   applyRawKeyState(RAW_KEY_BOOT, powerPressed);
 
   heldTime = 0;
+  for (uint8_t i = 0; i < KEYPAD_KEY_COUNT; i++) {
+    keypadKeyState[i] = nextKeypadState[i];
+  }
+
   for (uint8_t i = 0; i < RAW_BINDABLE_KEY_COUNT; i++) {
     rawKeyState[i] = nextRawState[i];
   }
@@ -530,6 +580,25 @@ unsigned long HalGPIO::getRawKeyHeldTime(const uint8_t keyCode) const {
     return 0;
   }
   return millis() - rawKeyPressedSince[keyCode];
+}
+
+bool HalGPIO::isKeypadKeyPressed(const KeypadKey key) const {
+  return key < KEYPAD_KEY_COUNT ? keypadKeyState[key] : false;
+}
+
+bool HalGPIO::wasKeypadKeyPressed(const KeypadKey key) const {
+  return key < KEYPAD_KEY_COUNT ? keypadKeyPressedEdge[key] : false;
+}
+
+bool HalGPIO::wasKeypadKeyReleased(const KeypadKey key) const {
+  return key < KEYPAD_KEY_COUNT ? keypadKeyReleasedEdge[key] : false;
+}
+
+unsigned long HalGPIO::getKeypadKeyHeldTime(const KeypadKey key) const {
+  if (key >= KEYPAD_KEY_COUNT || !keypadKeyState[key]) {
+    return 0;
+  }
+  return millis() - keypadKeyPressedSince[key];
 }
 
 int HalGPIO::getLastPressedBindableKey() const { return lastPressedBindableKey; }

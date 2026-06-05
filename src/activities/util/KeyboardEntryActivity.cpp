@@ -11,6 +11,17 @@
 
 const char* const KeyboardEntryActivity::shiftString[2] = {"shift", "SHIFT"};
 
+namespace {
+constexpr HalGPIO::KeypadKey physicalTextKeys[] = {
+    HalGPIO::KEYPAD_Q,      HalGPIO::KEYPAD_W, HalGPIO::KEYPAD_E, HalGPIO::KEYPAD_R,      HalGPIO::KEYPAD_T,
+    HalGPIO::KEYPAD_Y,      HalGPIO::KEYPAD_U, HalGPIO::KEYPAD_I, HalGPIO::KEYPAD_O,      HalGPIO::KEYPAD_P,
+    HalGPIO::KEYPAD_A,      HalGPIO::KEYPAD_S, HalGPIO::KEYPAD_D, HalGPIO::KEYPAD_F,      HalGPIO::KEYPAD_G,
+    HalGPIO::KEYPAD_H,      HalGPIO::KEYPAD_J, HalGPIO::KEYPAD_K, HalGPIO::KEYPAD_L,      HalGPIO::KEYPAD_Z,
+    HalGPIO::KEYPAD_X,      HalGPIO::KEYPAD_C, HalGPIO::KEYPAD_V, HalGPIO::KEYPAD_B,      HalGPIO::KEYPAD_N,
+    HalGPIO::KEYPAD_M,      HalGPIO::KEYPAD_DOLLAR, HalGPIO::KEYPAD_SPACE,
+};
+}  // namespace
+
 void KeyboardEntryActivity::onEnter() {
   Activity::onEnter();
   cursorPos = text.length();
@@ -29,6 +40,11 @@ void KeyboardEntryActivity::onEnter() {
   rightLongHandled = false;
   savedCursorPos = 0;
   rightStartCursorPos = 0;
+  physicalUppercase = false;
+  physicalDelHeld = false;
+  physicalDelLongHandled = false;
+  physicalSymHeld = false;
+  physicalSymLongHandled = false;
   requestUpdate();
 }
 
@@ -186,7 +202,284 @@ void KeyboardEntryActivity::mapColContentBottom(int& col, bool goingUp) const {
   }
 }
 
+bool KeyboardEntryActivity::isPhysicalSymbolHeld() const {
+  return gpio.isKeypadKeyPressed(HalGPIO::KEYPAD_SHIFT_LEFT) || gpio.isKeypadKeyPressed(HalGPIO::KEYPAD_SHIFT_RIGHT);
+}
+
+char KeyboardEntryActivity::getPhysicalLowerChar(const HalGPIO::KeypadKey key) const {
+  switch (key) {
+    case HalGPIO::KEYPAD_Q:
+      return 'q';
+    case HalGPIO::KEYPAD_W:
+      return 'w';
+    case HalGPIO::KEYPAD_E:
+      return 'e';
+    case HalGPIO::KEYPAD_R:
+      return 'r';
+    case HalGPIO::KEYPAD_T:
+      return 't';
+    case HalGPIO::KEYPAD_Y:
+      return 'y';
+    case HalGPIO::KEYPAD_U:
+      return 'u';
+    case HalGPIO::KEYPAD_I:
+      return 'i';
+    case HalGPIO::KEYPAD_O:
+      return 'o';
+    case HalGPIO::KEYPAD_P:
+      return 'p';
+    case HalGPIO::KEYPAD_A:
+      return 'a';
+    case HalGPIO::KEYPAD_S:
+      return 's';
+    case HalGPIO::KEYPAD_D:
+      return 'd';
+    case HalGPIO::KEYPAD_F:
+      return 'f';
+    case HalGPIO::KEYPAD_G:
+      return 'g';
+    case HalGPIO::KEYPAD_H:
+      return 'h';
+    case HalGPIO::KEYPAD_J:
+      return 'j';
+    case HalGPIO::KEYPAD_K:
+      return 'k';
+    case HalGPIO::KEYPAD_L:
+      return 'l';
+    case HalGPIO::KEYPAD_Z:
+      return 'z';
+    case HalGPIO::KEYPAD_X:
+      return 'x';
+    case HalGPIO::KEYPAD_C:
+      return 'c';
+    case HalGPIO::KEYPAD_V:
+      return 'v';
+    case HalGPIO::KEYPAD_B:
+      return 'b';
+    case HalGPIO::KEYPAD_N:
+      return 'n';
+    case HalGPIO::KEYPAD_M:
+      return 'm';
+    case HalGPIO::KEYPAD_DOLLAR:
+      return '$';
+    case HalGPIO::KEYPAD_SPACE:
+      return ' ';
+    default:
+      return '\0';
+  }
+}
+
+char KeyboardEntryActivity::getPhysicalUpperChar(const HalGPIO::KeypadKey key) const {
+  switch (key) {
+    case HalGPIO::KEYPAD_Q:
+      return 'Q';
+    case HalGPIO::KEYPAD_W:
+      return 'W';
+    case HalGPIO::KEYPAD_E:
+      return 'E';
+    case HalGPIO::KEYPAD_R:
+      return 'R';
+    case HalGPIO::KEYPAD_T:
+      return 'T';
+    case HalGPIO::KEYPAD_Y:
+      return 'Y';
+    case HalGPIO::KEYPAD_U:
+      return 'U';
+    case HalGPIO::KEYPAD_I:
+      return 'I';
+    case HalGPIO::KEYPAD_O:
+      return 'O';
+    case HalGPIO::KEYPAD_P:
+      return 'P';
+    case HalGPIO::KEYPAD_A:
+      return 'A';
+    case HalGPIO::KEYPAD_S:
+      return 'S';
+    case HalGPIO::KEYPAD_D:
+      return 'D';
+    case HalGPIO::KEYPAD_F:
+      return 'F';
+    case HalGPIO::KEYPAD_G:
+      return 'G';
+    case HalGPIO::KEYPAD_H:
+      return 'H';
+    case HalGPIO::KEYPAD_J:
+      return 'J';
+    case HalGPIO::KEYPAD_K:
+      return 'K';
+    case HalGPIO::KEYPAD_L:
+      return 'L';
+    case HalGPIO::KEYPAD_Z:
+      return 'Z';
+    case HalGPIO::KEYPAD_X:
+      return 'X';
+    case HalGPIO::KEYPAD_C:
+      return 'C';
+    case HalGPIO::KEYPAD_V:
+      return 'V';
+    case HalGPIO::KEYPAD_B:
+      return 'B';
+    case HalGPIO::KEYPAD_N:
+      return 'N';
+    case HalGPIO::KEYPAD_M:
+      return 'M';
+    case HalGPIO::KEYPAD_DOLLAR:
+      return '$';
+    case HalGPIO::KEYPAD_SPACE:
+      return ' ';
+    default:
+      return '\0';
+  }
+}
+
+char KeyboardEntryActivity::getPhysicalSymbolChar(const HalGPIO::KeypadKey key) const {
+  switch (key) {
+    case HalGPIO::KEYPAD_Q:
+      return '#';
+    case HalGPIO::KEYPAD_W:
+      return '1';
+    case HalGPIO::KEYPAD_E:
+      return '2';
+    case HalGPIO::KEYPAD_R:
+      return '3';
+    case HalGPIO::KEYPAD_T:
+      return '(';
+    case HalGPIO::KEYPAD_Y:
+      return ')';
+    case HalGPIO::KEYPAD_U:
+      return '_';
+    case HalGPIO::KEYPAD_I:
+      return '-';
+    case HalGPIO::KEYPAD_O:
+      return '+';
+    case HalGPIO::KEYPAD_P:
+      return '@';
+    case HalGPIO::KEYPAD_A:
+      return '*';
+    case HalGPIO::KEYPAD_S:
+      return '4';
+    case HalGPIO::KEYPAD_D:
+      return '5';
+    case HalGPIO::KEYPAD_F:
+      return '6';
+    case HalGPIO::KEYPAD_G:
+      return '/';
+    case HalGPIO::KEYPAD_H:
+      return ':';
+    case HalGPIO::KEYPAD_J:
+      return ';';
+    case HalGPIO::KEYPAD_K:
+      return '\'';
+    case HalGPIO::KEYPAD_L:
+      return '"';
+    case HalGPIO::KEYPAD_Z:
+      return '7';
+    case HalGPIO::KEYPAD_X:
+      return '8';
+    case HalGPIO::KEYPAD_C:
+      return '9';
+    case HalGPIO::KEYPAD_V:
+      return '?';
+    case HalGPIO::KEYPAD_B:
+      return '!';
+    case HalGPIO::KEYPAD_N:
+      return ',';
+    case HalGPIO::KEYPAD_M:
+      return '.';
+    case HalGPIO::KEYPAD_SPACE:
+      return ' ';
+    default:
+      return '\0';
+  }
+}
+
+void KeyboardEntryActivity::loopPhysicalKeyboard() {
+  cursorMode = false;
+  togglePos = false;
+  hintVisible = false;
+
+  if (gpio.wasKeypadKeyPressed(HalGPIO::KEYPAD_ALT)) {
+    physicalUppercase = !physicalUppercase;
+    requestUpdate();
+  }
+
+  if (gpio.wasKeypadKeyPressed(HalGPIO::KEYPAD_DEL)) {
+    physicalDelHeld = true;
+    physicalDelLongHandled = false;
+  }
+
+  if (physicalDelHeld && !physicalDelLongHandled && gpio.isKeypadKeyPressed(HalGPIO::KEYPAD_DEL) &&
+      gpio.getKeypadKeyHeldTime(HalGPIO::KEYPAD_DEL) > DEL_LONG_PRESS_MS) {
+    if (!text.empty()) {
+      text.clear();
+      cursorPos = 0;
+      requestUpdate();
+    }
+    physicalDelLongHandled = true;
+  }
+
+  if (gpio.wasKeypadKeyReleased(HalGPIO::KEYPAD_DEL)) {
+    if (physicalDelHeld && !physicalDelLongHandled && cursorPos > 0 && !text.empty()) {
+      text.erase(cursorPos - 1, 1);
+      cursorPos--;
+      requestUpdate();
+    }
+    physicalDelHeld = false;
+    physicalDelLongHandled = false;
+  }
+
+  if (gpio.wasKeypadKeyPressed(HalGPIO::KEYPAD_SYM)) {
+    physicalSymHeld = true;
+    physicalSymLongHandled = false;
+  }
+
+  if (physicalSymHeld && !physicalSymLongHandled && gpio.isKeypadKeyPressed(HalGPIO::KEYPAD_SYM) &&
+      gpio.getKeypadKeyHeldTime(HalGPIO::KEYPAD_SYM) > LONG_PRESS_MS) {
+    physicalSymLongHandled = true;
+    onCancel();
+    return;
+  }
+
+  if (gpio.wasKeypadKeyReleased(HalGPIO::KEYPAD_SYM)) {
+    if (physicalSymHeld && !physicalSymLongHandled && inputType == InputType::Password) {
+      passwordVisible = !passwordVisible;
+      requestUpdate();
+    }
+    physicalSymHeld = false;
+    physicalSymLongHandled = false;
+  }
+
+  if (gpio.wasKeypadKeyPressed(HalGPIO::KEYPAD_ENT)) {
+    onComplete(text);
+    return;
+  }
+
+  for (const HalGPIO::KeypadKey key : physicalTextKeys) {
+    if (!gpio.wasKeypadKeyPressed(key)) {
+      continue;
+    }
+
+    const char c =
+        isPhysicalSymbolHeld() ? getPhysicalSymbolChar(key) : (physicalUppercase ? getPhysicalUpperChar(key)
+                                                                                  : getPhysicalLowerChar(key));
+    if (c == '\0') {
+      continue;
+    }
+
+    const size_t previousLength = text.length();
+    insertChar(c);
+    if (text.length() != previousLength) {
+      requestUpdate();
+    }
+  }
+}
+
 void KeyboardEntryActivity::loop() {
+  if (physicalKeyboardMode) {
+    loopPhysicalKeyboard();
+    return;
+  }
+
   const int totalRows = getTotalRowCount();
 
   if (!cursorMode && mappedInput.wasPressed(MappedInputManager::Button::Up)) {
@@ -542,6 +835,27 @@ void KeyboardEntryActivity::render(RenderLock&&) {
     } else {
       renderer.drawCenteredText(SMALL_FONT_ID, hintY, tr(STR_KB_HINT_EDIT_ENTRY), true);
     }
+  }
+
+  if (physicalKeyboardMode) {
+    const int physicalHintLh = renderer.getLineHeight(SMALL_FONT_ID);
+    int physicalHintY = inputStartY + inputHeight + lineHeight + metrics.verticalSpacing * 2;
+
+    renderer.drawCenteredText(SMALL_FONT_ID, physicalHintY, physicalUppercase ? "ALT: ABC" : "ALT: abc", true);
+    physicalHintY += physicalHintLh;
+    renderer.drawCenteredText(SMALL_FONT_ID, physicalHintY, "Hold ^ + key: symbols", true);
+    physicalHintY += physicalHintLh;
+    if (inputType == InputType::Password) {
+      renderer.drawCenteredText(SMALL_FONT_ID, physicalHintY,
+                                passwordVisible ? "SYM: hide password" : "SYM: show password", true);
+      physicalHintY += physicalHintLh;
+    }
+    renderer.drawCenteredText(SMALL_FONT_ID, physicalHintY, "Hold SYM: cancel", true);
+    physicalHintY += physicalHintLh;
+    renderer.drawCenteredText(SMALL_FONT_ID, physicalHintY, "DEL: backspace  ENT: OK", true);
+
+    renderer.displayBuffer();
+    return;
   }
 
   const int keyHeight = metrics.keyboardKeyHeight;

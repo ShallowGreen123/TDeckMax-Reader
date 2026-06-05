@@ -78,6 +78,10 @@ class WifiSelectionActivity final : public Activity {
 
   // Connection timeout
   static constexpr unsigned long CONNECTION_TIMEOUT_MS = 15000;
+  static constexpr unsigned long WIFI_SCAN_RETRY_DELAY_MS = 350;
+  static constexpr unsigned long WIFI_SCAN_RADIO_SETTLE_MS = 250;
+  static constexpr uint32_t WIFI_SCAN_MAX_MS_PER_CHANNEL = 300;
+  static constexpr uint8_t WIFI_SCAN_MAX_RETRIES = 3;
   unsigned long connectionStartTime = 0;
 
   void renderNetworkList() const;
@@ -89,7 +93,7 @@ class WifiSelectionActivity final : public Activity {
   void renderForgetPrompt() const;
 
   void startWifiScan();
-  void processWifiScanResults();
+  bool performWifiScanAttempt();
   void selectNetwork(int index);
   void attemptConnection();
   void checkConnectionStatus();

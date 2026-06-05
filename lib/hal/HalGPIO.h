@@ -36,10 +36,52 @@ class HalGPIO {
   bool wasReleased(uint8_t buttonIndex) const;
   bool wasAnyReleased() const;
   unsigned long getHeldTime() const;
+  enum KeypadKey : uint8_t {
+    KEYPAD_ALT = 0,
+    KEYPAD_Q,
+    KEYPAD_W,
+    KEYPAD_E,
+    KEYPAD_R,
+    KEYPAD_T,
+    KEYPAD_Y,
+    KEYPAD_U,
+    KEYPAD_I,
+    KEYPAD_O,
+    KEYPAD_P,
+    KEYPAD_A,
+    KEYPAD_S,
+    KEYPAD_D,
+    KEYPAD_F,
+    KEYPAD_G,
+    KEYPAD_H,
+    KEYPAD_J,
+    KEYPAD_K,
+    KEYPAD_L,
+    KEYPAD_DEL,
+    KEYPAD_Z,
+    KEYPAD_X,
+    KEYPAD_C,
+    KEYPAD_V,
+    KEYPAD_B,
+    KEYPAD_N,
+    KEYPAD_M,
+    KEYPAD_DOLLAR,
+    KEYPAD_ENT,
+    KEYPAD_SHIFT_LEFT,
+    KEYPAD_MIC,
+    KEYPAD_SPACE,
+    KEYPAD_SYM,
+    KEYPAD_SHIFT_RIGHT,
+    KEYPAD_KEY_COUNT
+  };
   bool isRawKeyPressed(uint8_t keyCode) const;
   bool wasRawKeyPressed(uint8_t keyCode) const;
   bool wasRawKeyReleased(uint8_t keyCode) const;
   unsigned long getRawKeyHeldTime(uint8_t keyCode) const;
+  bool isKeypadKeyPressed(KeypadKey key) const;
+  bool wasKeypadKeyPressed(KeypadKey key) const;
+  bool wasKeypadKeyReleased(KeypadKey key) const;
+  unsigned long getKeypadKeyHeldTime(KeypadKey key) const;
   int getLastPressedBindableKey() const;
 
   void startDeepSleep();
@@ -74,6 +116,10 @@ class HalGPIO {
   bool rawKeyPressedEdge[RAW_BINDABLE_KEY_COUNT] = {false};
   bool rawKeyReleasedEdge[RAW_BINDABLE_KEY_COUNT] = {false};
   unsigned long rawKeyPressedSince[RAW_BINDABLE_KEY_COUNT] = {0};
+  bool keypadKeyState[KEYPAD_KEY_COUNT] = {false};
+  bool keypadKeyPressedEdge[KEYPAD_KEY_COUNT] = {false};
+  bool keypadKeyReleasedEdge[KEYPAD_KEY_COUNT] = {false};
+  unsigned long keypadKeyPressedSince[KEYPAD_KEY_COUNT] = {0};
   int lastPressedBindableKey = -1;
 
   bool lastUsbConnected = false;
