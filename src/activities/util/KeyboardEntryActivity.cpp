@@ -18,7 +18,7 @@ constexpr HalGPIO::KeypadKey physicalTextKeys[] = {
     HalGPIO::KEYPAD_A,      HalGPIO::KEYPAD_S, HalGPIO::KEYPAD_D, HalGPIO::KEYPAD_F,      HalGPIO::KEYPAD_G,
     HalGPIO::KEYPAD_H,      HalGPIO::KEYPAD_J, HalGPIO::KEYPAD_K, HalGPIO::KEYPAD_L,      HalGPIO::KEYPAD_Z,
     HalGPIO::KEYPAD_X,      HalGPIO::KEYPAD_C, HalGPIO::KEYPAD_V, HalGPIO::KEYPAD_B,      HalGPIO::KEYPAD_N,
-    HalGPIO::KEYPAD_M,      HalGPIO::KEYPAD_DOLLAR, HalGPIO::KEYPAD_SPACE,
+    HalGPIO::KEYPAD_M,      HalGPIO::KEYPAD_DOLLAR, HalGPIO::KEYPAD_MIC, HalGPIO::KEYPAD_SPACE,
 };
 }  // namespace
 
@@ -262,6 +262,8 @@ char KeyboardEntryActivity::getPhysicalLowerChar(const HalGPIO::KeypadKey key) c
       return 'm';
     case HalGPIO::KEYPAD_DOLLAR:
       return '$';
+    case HalGPIO::KEYPAD_MIC:
+      return '0';
     case HalGPIO::KEYPAD_SPACE:
       return ' ';
     default:
@@ -325,6 +327,8 @@ char KeyboardEntryActivity::getPhysicalUpperChar(const HalGPIO::KeypadKey key) c
       return 'M';
     case HalGPIO::KEYPAD_DOLLAR:
       return '$';
+    case HalGPIO::KEYPAD_MIC:
+      return '0';
     case HalGPIO::KEYPAD_SPACE:
       return ' ';
     default:
